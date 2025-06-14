@@ -89,5 +89,41 @@ describe('User endpoints', () => {
       });
     expect(res.statusCode).toBe(401);
   });
+  
+  // ======================= ACTUALIZAR PERFIL =======================
+it('debe actualizar el perfil correctamente', async () => {
+  const res = await request(app)
+    .patch('/user/perfil')
+    .set('Authorization', `Bearer ${token}`)
+    .send({
+      name: 'Nuevo Nombre',
+      phone: '0987654321',
+      email: 'nuevoemail@example.com'
+    });
+  expect(res.statusCode).toBe(200);
+  expect(res.body.user.name).toBe('Nuevo Nombre');
+  expect(res.body.user.phone).toBe('0987654321');
+  expect(res.body.user.email).toBe('nuevoemail@example.com');
+});
+
+it('debe fallar si los datos no son válidos', async () => {
+  const res = await request(app)
+    .patch('/user/perfil')
+    .set('Authorization', `Bearer ${token}`)
+    .send({
+      phone: 'abc123' // Teléfono inválido
+    });
+  expect(res.statusCode).toBe(400);
+  expect(res.body.error).toBe('El teléfono debe tener 10 dígitos');
+});
+
+it('debe fallar si no está autenticado al actualizar perfil', async () => {
+  const res = await request(app)
+    .patch('/user/perfil')
+    .send({
+      name: 'Sin Token'
+    });
+  expect(res.statusCode).toBe(401);
+});
 
 });
