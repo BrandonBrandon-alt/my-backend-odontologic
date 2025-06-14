@@ -2,9 +2,10 @@ const express = require('express');
 const router = express.Router();
 const authenticateToken = require('../middleware/authMiddleware');
 const { User } = require('../models/user');
-const resetPassword = require('../dto/ChangedPasswordDTO'); // Asegúrate de que la ruta sea correcta
+const resetPassword = require('../dto/ChangedPasswordDTO'); // DTO para cambio de contraseña
 const bcrypt = require('bcrypt');
 
+// ======================= OBTENER PERFIL DE USUARIO =======================
 router.get('/perfil', authenticateToken, async (req, res) => {
   try {
     // Busca el usuario en la base de datos usando el id del token
@@ -19,6 +20,7 @@ router.get('/perfil', authenticateToken, async (req, res) => {
   }
 });
 
+// ======================= CAMBIO DE CONTRASEÑA (AUTENTICADO) =======================
 router.post('/cambiar-password', authenticateToken, async (req, res) => {
   const { error } = resetPassword.validate(req.body);
   if (error) {
@@ -39,11 +41,5 @@ router.post('/cambiar-password', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Error al cambiar la contraseña', details: err.message });
   }
 });
-
-
-
-
-
-
 
 module.exports = router;

@@ -34,6 +34,8 @@ afterAll(async () => {
 });
 
 describe('User endpoints', () => {
+
+  // ======================= PERFIL DE USUARIO =======================
   it('debe mostrar el perfil', async () => {
     const res = await request(app)
       .get('/user/perfil')
@@ -48,6 +50,7 @@ describe('User endpoints', () => {
     expect(res.statusCode).toBe(401);
   });
 
+  // ======================= CAMBIO DE CONTRASEÑA =======================
   it('debe cambiar la contraseña correctamente', async () => {
     const res = await request(app)
       .post('/user/cambiar-password')
@@ -86,4 +89,5 @@ describe('User endpoints', () => {
       });
     expect(res.statusCode).toBe(401);
   });
+
 });

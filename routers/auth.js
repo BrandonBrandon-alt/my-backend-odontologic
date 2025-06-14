@@ -3,18 +3,20 @@ const router = express.Router();
 const createUser = require("../dto/registroDTO");
 const login = require("../dto/loginDTO");
 const bcrypt = require("bcrypt");
-const { User } = require("../models/user"); // Asegúrate de que la ruta sea correcta
+const { User } = require("../models/user");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
-const { Op } = require("sequelize"); // <-- Agrega esta línea
+const { Op } = require("sequelize");
 const resetPassword = require("../dto/resetPasswordDTO");
 const {
-  sendActivationEmail,sendPasswordResetEmail
-} = require("../utils/mailer"); // Asegúrate de que la ruta sea correcta
+  sendActivationEmail,
+  sendPasswordResetEmail
+} = require("../utils/mailer");
 
 const refreshTokens = [];
 const activationCode = crypto.randomBytes(3).toString("hex");
 
+// ======================= REGISTRO =======================
 router.post("/registro", async (req, res) => {
   const { error } = createUser.validate(req.body);
   if (error) {
@@ -22,8 +24,6 @@ router.post("/registro", async (req, res) => {
   }
 
   const { name, idNumber, email, password, phone } = req.body;
-
-  // Encriptar la contraseña
   const hashedPassword = await bcrypt.hash(password, 10);
 
   try {
@@ -45,23 +45,22 @@ router.post("/registro", async (req, res) => {
       email,
       password: hashedPassword,
       phone,
-      role: "user", // Asignar rol por defecto
+      role: "user",
       status: "inactive",
       activation_code: activationCode,
     });
-    await sendActivationEmail(email, activationCode); // <-- Agrega esto
+    await sendActivationEmail(email, activationCode);
     res.status(201).json({
       message: "Usuario registrado exitosamente",
       user: { ...user.toJSON(), password: undefined },
     });
   } catch (err) {
-    console.error("Error al registrar usuario:", err); // <-- Agrega esto
-    res
-      .status(500)
-      .json({ error: "Error al registrar usuario", details: err.message });
+    console.error("Error al registrar usuario:", err);
+    res.status(500).json({ error: "Error al registrar usuario", details: err.message });
   }
 });
 
+// ======================= LOGIN =======================
 router.post("/login", async (req, res) => {
   const { error } = login.validate(req.body);
   if (error) {
@@ -71,13 +70,11 @@ router.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    // Buscar usuario en la base de datos
     const user = await User.findOne({ where: { email } });
     if (!user) {
       return res.status(400).json({ error: "Usuario no encontrado" });
     }
 
-    // Comparar contraseñas
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) {
       return res.status(400).json({ error: "Contraseña incorrecta" });
@@ -97,7 +94,7 @@ router.post("/login", async (req, res) => {
       process.env.JWT_REFRESH_SECRET,
       { expiresIn: "7d" }
     );
-    refreshTokens.push(refreshToken); // <-- Corrige aquí
+    refreshTokens.push(refreshToken);
 
     res.status(200).json({
       message: "Inicio de sesión exitoso",
@@ -110,6 +107,7 @@ router.post("/login", async (req, res) => {
   }
 });
 
+// ======================= REFRESH TOKEN =======================
 router.post("/token", (req, res) => {
   const { refreshToken } = req.body;
   if (!refreshToken)
@@ -129,6 +127,7 @@ router.post("/token", (req, res) => {
   });
 });
 
+// ======================= ACTIVACIÓN DE CUENTA =======================
 router.post("/activar", async (req, res) => {
   const { email, code } = req.body;
   const user = await User.findOne({ where: { email, activation_code: code } });
@@ -141,7 +140,7 @@ router.post("/activar", async (req, res) => {
   res.json({ message: "Cuenta activada correctamente" });
 });
 
-
+// ======================= REENVÍO DE CÓDIGO DE ACTIVACIÓN =======================
 router.post("/reenviar-activacion", async (req, res) => {
   const { email } = req.body;
   if (!email) {
@@ -170,7 +169,7 @@ router.post("/reenviar-activacion", async (req, res) => {
   }
 });
 
-
+// ======================= SOLICITUD DE CÓDIGO DE RECUPERACIÓN =======================
 router.post("/solicitar-reset", async (req, res) => {
   const { email } = req.body;
   if (!email) {
@@ -193,12 +192,12 @@ router.post("/solicitar-reset", async (req, res) => {
 
     res.json({ message: "Código de recuperación enviado correctamente" });
   } catch (err) {
-    console.log(err); // <-- AGREGA ESTO
+    console.log(err);
     res.status(500).json({ error: "Error al solicitar recuperación", details: err.message });
   }
 });
 
-
+// ======================= REENVÍO DE CÓDIGO DE RECUPERACIÓN =======================
 router.post("/reenviar-reset", async (req, res) => {
   const { email } = req.body;
   if (!email) {
@@ -222,6 +221,7 @@ router.post("/reenviar-reset", async (req, res) => {
   }
 });
 
+// ======================= CAMBIO DE CONTRASEÑA POR CÓDIGO DE RECUPERACIÓN =======================
 router.post("/cambiar-password-reset", async (req, res) => {
   const { error } = resetPassword.validate(req.body);
   if (error) {
@@ -246,7 +246,7 @@ router.post("/cambiar-password-reset", async (req, res) => {
   }
 });
 
-
+// ======================= VERIFICAR CÓDIGO DE RECUPERACIÓN =======================
 router.post("/verificar-reset", async (req, res) => {
   const { email, code } = req.body;
   if (!email || !code) {
@@ -264,8 +264,7 @@ router.post("/verificar-reset", async (req, res) => {
   }
 });
 
-
-// (Opcional) Logout
+// ======================= LOGOUT (Opcional) =======================
 router.post("/logout", (req, res) => {
   const { refreshToken } = req.body;
   const index = refreshTokens.indexOf(refreshToken);

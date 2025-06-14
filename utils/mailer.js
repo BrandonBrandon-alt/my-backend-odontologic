@@ -1,23 +1,27 @@
 require('dotenv').config();
 const nodemailer = require('nodemailer');
 
+// ======================= CONFIGURACIÓN DEL TRANSPORTADOR =======================
 const transporter = nodemailer.createTransport({
-  service : 'gmail',
+  service: 'gmail',
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
 });
 
-async function sendEmail(to, subject, text) {
+// ======================= FUNCIÓN GENÉRICA PARA ENVIAR EMAIL =======================
+async function sendEmail(to, subject, text, html) {
   await transporter.sendMail({
     from: process.env.EMAIL_USER,
     to,
     subject,
     text,
+    html, // Permite enviar contenido HTML si se proporciona
   });
 }
 
+// ======================= EMAIL DE ACTIVACIÓN DE CUENTA =======================
 async function sendActivationEmail(email, code) {
   const html = `
     <div style="font-family: Arial, sans-serif; color: #222;">
@@ -35,6 +39,7 @@ async function sendActivationEmail(email, code) {
   );
 }
 
+// ======================= EMAIL DE RECUPERACIÓN DE CONTRASEÑA =======================
 async function sendPasswordResetEmail(email, code) {
   const html = `
     <div style="font-family: Arial, sans-serif; color: #222;">
@@ -52,7 +57,5 @@ async function sendPasswordResetEmail(email, code) {
   );
 }
 
-
-
-
+// ======================= EXPORTS =======================
 module.exports = { sendActivationEmail, sendPasswordResetEmail };
