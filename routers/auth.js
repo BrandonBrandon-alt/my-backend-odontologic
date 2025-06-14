@@ -140,6 +140,36 @@ router.post("/activar", async (req, res) => {
   res.json({ message: "Cuenta activada correctamente" });
 });
 
+
+router.post("/reenviar-activacion", async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ error: "El correo es obligatorio" });
+  }
+
+  try {
+    const user = await User.findOne({ where: { email } });
+    if (!user) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+    if (user.status === "active") {
+      return res.status(400).json({ error: "La cuenta ya está activada" });
+    }
+
+    // Genera un nuevo código de activación
+    const newActivationCode = crypto.randomBytes(3).toString("hex");
+    user.activation_code = newActivationCode;
+    await user.save();
+
+    await sendActivationEmail(email, newActivationCode);
+
+    res.json({ message: "Código de activación reenviado correctamente" });
+  } catch (err) {
+    res.status(500).json({ error: "Error al reenviar código", details: err.message });
+  }
+});
+
+
 // (Opcional) Logout
 router.post("/logout", (req, res) => {
   const { refreshToken } = req.body;

@@ -1,9 +1,10 @@
 const express = require('express');
-const registroRouter = require('./routers/auth'); 
-const loginRouter = require('./routers/auth')// Cambia el nombre del archivo aquí
-const perfilRouter = require('./routers/user'); // Asegúrate de que este archivo exista
+const authRouter = require('./routers/auth');
+const userRouter = require('./routers/user');
 const app = express();
+
 app.use(express.json());
-app.use('/', registroRouter,loginRouter, perfilRouter); // Asegúrate de que los routers estén correctamente configurados
+app.use('/', authRouter); // rutas de auth (registro, login, activar, etc)
+app.use('/user', userRouter); // rutas de usuario (perfil, cambiar-password, etc)
 
 module.exports = app;
