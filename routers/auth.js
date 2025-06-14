@@ -7,8 +7,9 @@ const { User } = require("../models/user"); // Asegúrate de que la ruta sea cor
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const { Op } = require("sequelize"); // <-- Agrega esta línea
+const resetPassword = require("../dto/resetPasswordDTO");
 const {
-  sendActivationEmail,
+  sendActivationEmail,sendPasswordResetEmail
 } = require("../utils/mailer"); // Asegúrate de que la ruta sea correcta
 
 const refreshTokens = [];
@@ -166,6 +167,100 @@ router.post("/reenviar-activacion", async (req, res) => {
     res.json({ message: "Código de activación reenviado correctamente" });
   } catch (err) {
     res.status(500).json({ error: "Error al reenviar código", details: err.message });
+  }
+});
+
+
+router.post("/solicitar-reset", async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ error: "El correo es obligatorio" });
+  }
+  try {
+    const user = await User.findOne({ where: { email } });
+    if (!user) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    let resetCode = user.password_reset_code;
+    if (!resetCode) {
+      resetCode = crypto.randomBytes(3).toString("hex");
+      user.password_reset_code = resetCode;
+      await user.save();
+    }
+
+    await sendPasswordResetEmail(email, resetCode);
+
+    res.json({ message: "Código de recuperación enviado correctamente" });
+  } catch (err) {
+    console.log(err); // <-- AGREGA ESTO
+    res.status(500).json({ error: "Error al solicitar recuperación", details: err.message });
+  }
+});
+
+
+router.post("/reenviar-reset", async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ error: "El correo es obligatorio" });
+  }
+  try {
+    const user = await User.findOne({ where: { email } });
+    if (!user) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+    let resetCode = user.password_reset_code;
+    if (!resetCode) {
+      resetCode = crypto.randomBytes(3).toString("hex");
+      user.password_reset_code = resetCode;
+      await user.save();
+    }
+    await sendPasswordResetEmail(email, resetCode);
+    res.json({ message: "Código de recuperación reenviado correctamente" });
+  } catch (err) {
+    res.status(500).json({ error: "Error al reenviar código", details: err.message });
+  }
+});
+
+router.post("/cambiar-password-reset", async (req, res) => {
+  const { error } = resetPassword.validate(req.body);
+  if (error) {
+    return res.status(400).json({ error: error.details[0].message });
+  }
+
+  const { password_reset_code, newPassword } = req.body;
+
+  try {
+    const user = await User.findOne({ where: { password_reset_code } });
+    if (!user) {
+      return res.status(400).json({ error: "Código de recuperación inválido" });
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    user.password_reset_code = null;
+    await user.save();
+
+    res.json({ message: "Contraseña actualizada correctamente" });
+  } catch (err) {
+    res.status(500).json({ error: "Error al cambiar contraseña", details: err.message });
+  }
+});
+
+
+router.post("/verificar-reset", async (req, res) => {
+  const { email, code } = req.body;
+  if (!email || !code) {
+    return res.status(400).json({ error: "El correo y el código son obligatorios" });
+  }
+
+  try {
+    const user = await User.findOne({ where: { email, password_reset_code: code } });
+    if (!user) {
+      return res.status(400).json({ error: "Código o correo incorrecto" });
+    }
+    res.json({ message: "Código válido" });
+  } catch (err) {
+    res.status(500).json({ error: "Error al verificar el código", details: err.message });
   }
 });
 

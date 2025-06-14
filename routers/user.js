@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const authenticateToken = require('../middleware/authMiddleware');
 const { User } = require('../models/user');
-const resetPassword = require('../dto/resetPasswordDTO'); // Asegúrate de que la ruta sea correcta
+const resetPassword = require('../dto/ChangedPasswordDTO'); // Asegúrate de que la ruta sea correcta
 const bcrypt = require('bcrypt');
 
 router.get('/perfil', authenticateToken, async (req, res) => {
