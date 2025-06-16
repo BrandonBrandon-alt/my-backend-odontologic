@@ -1,33 +1,44 @@
+// filepath: routers/auth.js
 const express = require("express");
 const router = express.Router();
-const createUser = require("../dto/registroDTO");
-const login = require("../dto/loginDTO");
 const bcrypt = require("bcrypt");
-const { User } = require("../models/user");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
-const { Op } = require("sequelize");
+const { Op } = require("sequelize"); // Asegúrate de que Op esté disponible
+
+const createUser = require("../dto/registroDTO"); // <-- CORRECCIÓN: 'dtos' (plural) y 'createUser.dto'
+const login = require("../dto/loginDTO");
 const resetPassword = require("../dto/resetPasswordDTO");
+
+// Importa tu modelo de usuario (ajusta la ruta según tu estructura real)
+const { User } = require("../models/user");
+
+// Importa tu módulo de mailer (ajusta la ruta según tu estructura real)
 const {
   sendActivationEmail,
   sendPasswordResetEmail
 } = require("../utils/mailer");
 
+// Variable para almacenar refresh tokens (en un entorno real, esto sería una base de datos o caché)
 const refreshTokens = [];
-const activationCode = crypto.randomBytes(3).toString("hex");
 
 // ======================= REGISTRO =======================
 router.post("/registro", async (req, res) => {
-  const { error } = createUser.validate(req.body);
-  if (error) {
-    return res.status(400).json({ error: error.details[0].message });
-  }
-
-  const { name, idNumber, email, password, phone } = req.body;
-  const hashedPassword = await bcrypt.hash(password, 10);
-
   try {
-    // Verifica si ya existe un usuario con ese id_number o email
+    // 1. Validar los datos del cuerpo de la solicitud con Joi
+    const { error } = createUser.validate(req.body);
+    if (error) {
+      return res.status(400).json({ error: error.details[0].message });
+    }
+
+    // 2. Destructurar todos los campos
+    const { name, idNumber, email, password, phone, address, birth_date } = req.body;
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    // Genera un código de activación único para este usuario
+    const activationCode = crypto.randomBytes(8).toString('hex');
+
+    // 3. Verifica si ya existe un usuario con ese id_number o email
     const exists = await User.findOne({
       where: {
         [Op.or]: [{ id_number: idNumber }, { email }],
@@ -38,22 +49,31 @@ router.post("/registro", async (req, res) => {
         error: "El usuario ya existe con ese email o número de identificación",
       });
     }
-    // Guardar usuario en la base de datos
-    const user = await User.create({
+
+    // 4. Crear el objeto para guardar en la base de datos
+    const userToCreate = {
       name,
       id_number: idNumber,
       email,
       password: hashedPassword,
       phone,
+      address: address || null,
+      // Asegúrate de que birth_date se convierta a Date si existe
+      birth_date: birth_date ? new Date(birth_date) : null,
+      profile_picture: null, // Asignar null ya que no se subirá ninguna imagen en este flujo
       role: "user",
       status: "inactive",
       activation_code: activationCode,
-    });
+    };
+
+    const user = await User.create(userToCreate);
     await sendActivationEmail(email, activationCode);
+
     res.status(201).json({
       message: "Usuario registrado exitosamente",
       user: { ...user.toJSON(), password: undefined },
     });
+
   } catch (err) {
     console.error("Error al registrar usuario:", err);
     res.status(500).json({ error: "Error al registrar usuario", details: err.message });
@@ -115,11 +135,13 @@ router.post("/token", (req, res) => {
   if (!refreshTokens.includes(refreshToken))
     return res.status(403).json({ error: "Refresh token inválido" });
 
-  jwt.verify(refreshToken, process.env.JWT_SECRET, (err, user) => {
+  // Nota: Deberías verificar con process.env.JWT_REFRESH_SECRET, no JWT_SECRET
+  jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET, (err, user) => {
     if (err) return res.status(403).json({ error: "Refresh token inválido" });
 
+    // Genera un nuevo accessToken con los datos del usuario del refresh token
     const accessToken = jwt.sign(
-      { id: user.id, email: user.email },
+      { id: user.id, email: user.email, role: user.role, status: user.status }, // Incluir rol y status si son necesarios
       process.env.JWT_SECRET,
       { expiresIn: "1h" }
     );
@@ -157,7 +179,7 @@ router.post("/reenviar-activacion", async (req, res) => {
     }
 
     // Genera un nuevo código de activación
-    const newActivationCode = crypto.randomBytes(3).toString("hex");
+    const newActivationCode = crypto.randomBytes(8).toString("hex"); // Unificado a 32 bytes
     user.activation_code = newActivationCode;
     await user.save();
 
@@ -182,8 +204,8 @@ router.post("/solicitar-reset", async (req, res) => {
     }
 
     let resetCode = user.password_reset_code;
-    if (!resetCode) {
-      resetCode = crypto.randomBytes(3).toString("hex");
+    if (!resetCode) { // Generar nuevo código solo si no existe uno
+      resetCode = crypto.randomBytes(8).toString("hex"); // Unificado a 32 bytes
       user.password_reset_code = resetCode;
       await user.save();
     }
@@ -209,8 +231,8 @@ router.post("/reenviar-reset", async (req, res) => {
       return res.status(404).json({ error: "Usuario no encontrado" });
     }
     let resetCode = user.password_reset_code;
-    if (!resetCode) {
-      resetCode = crypto.randomBytes(3).toString("hex");
+    if (!resetCode) { // Generar nuevo código solo si no existe uno
+      resetCode = crypto.randomBytes(8).toString("hex"); // Unificado a 32 bytes
       user.password_reset_code = resetCode;
       await user.save();
     }
@@ -237,7 +259,7 @@ router.post("/cambiar-password-reset", async (req, res) => {
     }
 
     user.password = await bcrypt.hash(newPassword, 10);
-    user.password_reset_code = null;
+    user.password_reset_code = null; // Limpiar el código después de usarlo
     await user.save();
 
     res.json({ message: "Contraseña actualizada correctamente" });

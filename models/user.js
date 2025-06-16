@@ -8,18 +8,19 @@ const sequelize = new Sequelize(
   {
     host: process.env.DB_HOST,
     dialect: "postgres",
+    logging: false, // Puedes dejarlo en true para ver las consultas SQL en desarrollo
   }
 );
 
 const User = sequelize.define("User", {
   name: { type: DataTypes.STRING, allowNull: false },
-  id_number: { type: DataTypes.STRING, allowNull: false, unique: true ,primaryKey: true},
+  id_number: { type: DataTypes.STRING, allowNull: false, unique: true },
   email: { type: DataTypes.STRING, allowNull: false, unique: true },
   password: { type: DataTypes.STRING, allowNull: false },
   phone: { type: DataTypes.STRING, allowNull: false },
   address: { type: DataTypes.STRING, allowNull: true },
   birth_date: { type: DataTypes.DATE, allowNull: true },
-  profile_picture: { type: DataTypes.STRING, allowNull: true },
+  // Eliminado: profile_picture
   role: {
     type: DataTypes.ENUM("user", "dentist", "admin"),
     allowNull: false,
@@ -38,6 +39,10 @@ const User = sequelize.define("User", {
     type: DataTypes.STRING,
     allowNull: true,
   },
+}, {
+  tableName: 'users',
+  freezeTableName: true,
+  timestamps: true,
 });
 
 module.exports = { User, sequelize };

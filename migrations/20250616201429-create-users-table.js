@@ -1,12 +1,8 @@
-// migrations/YYYYMMDDHHMMSS-create-users-table.js
+// migrations/YYYYMMDDHHMMSS-create-users-table.js (el timestamp variará)
 'use strict';
 module.exports = {
   up: async (queryInterface, Sequelize) => {
-    await queryInterface.createTable('users', { // Importante: Asegúrate de que el nombre de la tabla coincida con lo que esperas.
-                                                // Sequelize por defecto pluraliza y puede poner 'Users' (mayúscula) o 'users' (minúscula).
-                                                // Si tu modelo tiene `freezeTableName: true` o `tableName: 'users'`, usa `users` aquí.
-                                                // Si no, 'Users' o 'users' funcionarán con PostgreSQL ya que convierte a minúsculas automáticamente si no está entre comillas.
-                                                // Para mayor claridad y evitar posibles problemas de case-sensitivity, te sugiero cambiar 'Users' a 'users' si lo deseas.
+    await queryInterface.createTable('users', {
       id: {
         allowNull: false,
         autoIncrement: true,
@@ -15,12 +11,12 @@ module.exports = {
       },
       name: {
         type: Sequelize.STRING,
-        allowNull: false // Según tu modelo, el nombre es requerido
+        allowNull: false
       },
       id_number: {
         type: Sequelize.STRING,
         allowNull: false,
-        unique: true // id_number es único
+        unique: true
       },
       email: {
         type: Sequelize.STRING,
@@ -43,17 +39,14 @@ module.exports = {
         type: Sequelize.DATE,
         allowNull: true
       },
-      profile_picture: {
-        type: Sequelize.STRING,
-        allowNull: true
-      },
+      // Eliminado: profile_picture
       role: {
-        type: Sequelize.ENUM('user', 'dentist', 'admin'), // Definición de ENUM
+        type: Sequelize.ENUM('user', 'dentist', 'admin'),
         allowNull: false,
         defaultValue: 'user'
       },
       status: {
-        type: Sequelize.ENUM('active', 'locked', 'inactive'), // Definición de ENUM
+        type: Sequelize.ENUM('active', 'locked', 'inactive'),
         allowNull: false,
         defaultValue: 'inactive'
       },
@@ -76,6 +69,6 @@ module.exports = {
     });
   },
   down: async (queryInterface, Sequelize) => {
-    await queryInterface.dropTable('users'); // Si cambiaste arriba a 'users', cámbialo aquí también
+    await queryInterface.dropTable('users');
   }
 };
