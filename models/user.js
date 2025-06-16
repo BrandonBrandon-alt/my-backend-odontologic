@@ -13,10 +13,13 @@ const sequelize = new Sequelize(
 
 const User = sequelize.define("User", {
   name: { type: DataTypes.STRING, allowNull: false },
-  id_number: { type: DataTypes.STRING, allowNull: false, unique: true },
+  id_number: { type: DataTypes.STRING, allowNull: false, unique: true ,primaryKey: true},
   email: { type: DataTypes.STRING, allowNull: false, unique: true },
   password: { type: DataTypes.STRING, allowNull: false },
   phone: { type: DataTypes.STRING, allowNull: false },
+  address: { type: DataTypes.STRING, allowNull: true },
+  birth_date: { type: DataTypes.DATE, allowNull: true },
+  profile_picture: { type: DataTypes.STRING, allowNull: true },
   role: {
     type: DataTypes.ENUM("user", "dentist", "admin"),
     allowNull: false,

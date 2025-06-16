@@ -17,6 +17,12 @@ const createUser = Joi.object({
     'string.min': 'La contraseña debe tener al menos 6 caracteres',
     'any.required': 'La contraseña es obligatoria',
   }),
+
+  confirmNewPassword: Joi.string().valid(Joi.ref('password')).required().messages({
+      'any.only': 'Las contraseñas no coinciden',
+      'any.required': 'La confirmación de la contraseña es obligatoria',
+    }),
+
   phone: Joi.string().pattern(/^[0-9]{10}$/).required().messages({
     'string.pattern.base': 'El teléfono debe tener 10 dígitos',
     'any.required': 'El teléfono es obligatorio',
