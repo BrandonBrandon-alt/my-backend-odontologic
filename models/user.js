@@ -1,4 +1,3 @@
-// filepath: /home/brandonmontealegre/Documentos/pruebaJavascript/my-backend/models/user.js
 require("dotenv").config();
 const { Sequelize, DataTypes } = require("sequelize");
 const sequelize = new Sequelize(
@@ -20,7 +19,6 @@ const User = sequelize.define("User", {
   phone: { type: DataTypes.STRING, allowNull: false },
   address: { type: DataTypes.STRING, allowNull: true },
   birth_date: { type: DataTypes.DATE, allowNull: true },
-  // Eliminado: profile_picture
   role: {
     type: DataTypes.ENUM("user", "dentist", "admin"),
     allowNull: false,
@@ -35,9 +33,19 @@ const User = sequelize.define("User", {
     type: DataTypes.STRING,
     allowNull: true,
   },
+  // Nuevo campo para la fecha de expiración del código de activación
+  activation_expires_at: {
+    type: DataTypes.DATE, // Tipo de dato para almacenar fechas y horas
+    allowNull: true, // Puede ser nulo si el código no está activo o si ya expiró/fue usado
+  },
   password_reset_code: {
     type: DataTypes.STRING,
     allowNull: true,
+  },
+  // Nuevo campo para la fecha de expiración del código de reseteo de contraseña
+  password_reset_expires_at: {
+    type: DataTypes.DATE, // Tipo de dato para almacenar fechas y horas
+    allowNull: true, // Puede ser nulo si el código no está activo o si ya expiró/fue usado
   },
 }, {
   tableName: 'users',

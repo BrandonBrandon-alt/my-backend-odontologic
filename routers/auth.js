@@ -1,4 +1,3 @@
-// filepath: routers/auth.js
 const express = require("express");
 const router = express.Router();
 const bcrypt = require("bcrypt");
@@ -22,23 +21,35 @@ const {
 // Variable para almacenar refresh tokens (en un entorno real, esto sería una base de datos o caché)
 const refreshTokens = [];
 
+// ===============================================================
+// NUEVAS FUNCIONES DE UTILIDAD PARA GESTIÓN DE CÓDIGOS
+// ===============================================================
+
+/**
+ * Generates a random code and an expiration time.
+ * @param {number} bytes - Number of bytes to generate the code (e.g., 8 for 16 hex characters).
+ * @param {number} expiresInMinutes - Code validity duration in minutes.
+ * @returns {{code: string, expiresAt: Date}}
+ */
+function generateCodeWithExpiration(bytes = 8, expiresInMinutes = 60) {
+  const code = crypto.randomBytes(bytes).toString("hex");
+  const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000); // Adds minutes to the current date
+  return { code, expiresAt };
+}
+
 // ======================= REGISTRO =======================
 router.post("/registro", async (req, res) => {
   try {
-    // 1. Validar los datos del cuerpo de la solicitud con Joi
+    // 1. Validate the request body data with Joi
     const { error } = createUser.validate(req.body);
     if (error) {
       return res.status(400).json({ error: error.details[0].message });
     }
 
-    // 2. Destructurar todos los campos
+    // 2. Destructure all fields
     const { name, idNumber, email, password, phone, address, birth_date } = req.body;
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    // Genera un código de activación único para este usuario
-    const activationCode = crypto.randomBytes(8).toString('hex');
-
-    // 3. Verifica si ya existe un usuario con ese id_number o email
+    // 3. Check if a user with that id_number or email already exists
     const exists = await User.findOne({
       where: {
         [Op.or]: [{ id_number: idNumber }, { email }],
@@ -50,7 +61,11 @@ router.post("/registro", async (req, res) => {
       });
     }
 
-    // 4. Crear el objeto para guardar en la base de datos
+    const hashedPassword = await bcrypt.hash(password, 10);
+    // Use the new utility to generate the activation code with expiration (e.g., 24 hours)
+    const { code: activationCode, expiresAt: activationExpiresAt } = generateCodeWithExpiration(8, 1440); // 1440 minutes = 24 hours
+
+    // 4. Create the object to save to the database
     const userToCreate = {
       name,
       id_number: idNumber,
@@ -58,19 +73,20 @@ router.post("/registro", async (req, res) => {
       password: hashedPassword,
       phone,
       address: address || null,
-      // Asegúrate de que birth_date se convierta a Date si existe
+      // Ensure that birth_date is converted to Date if it exists
       birth_date: birth_date ? new Date(birth_date) : null,
-      profile_picture: null, // Asignar null ya que no se subirá ninguna imagen en este flujo
+      profile_picture: null, // Assign null as no image will be uploaded in this flow
       role: "user",
       status: "inactive",
       activation_code: activationCode,
+      activation_expires_at: activationExpiresAt, // Save the expiration time
     };
 
     const user = await User.create(userToCreate);
     await sendActivationEmail(email, activationCode);
 
     res.status(201).json({
-      message: "Usuario registrado exitosamente",
+      message: "Usuario registrado exitosamente. Revisa tu correo para activar tu cuenta.",
       user: { ...user.toJSON(), password: undefined },
     });
 
@@ -101,7 +117,7 @@ router.post("/login", async (req, res) => {
     }
 
     if (user.status !== "active") {
-      return res.status(403).json({ error: "Cuenta inactiva o bloqueada" });
+      return res.status(403).json({ error: "Cuenta inactiva o bloqueada. Por favor, activa tu cuenta." });
     }
 
     const accessToken = jwt.sign(
@@ -135,13 +151,11 @@ router.post("/token", (req, res) => {
   if (!refreshTokens.includes(refreshToken))
     return res.status(403).json({ error: "Refresh token inválido" });
 
-  // Nota: Deberías verificar con process.env.JWT_REFRESH_SECRET, no JWT_SECRET
   jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET, (err, user) => {
     if (err) return res.status(403).json({ error: "Refresh token inválido" });
 
-    // Genera un nuevo accessToken con los datos del usuario del refresh token
     const accessToken = jwt.sign(
-      { id: user.id, email: user.email, role: user.role, status: user.status }, // Incluir rol y status si son necesarios
+      { id: user.id, email: user.email, role: user.role, status: user.status },
       process.env.JWT_SECRET,
       { expiresIn: "1h" }
     );
@@ -152,14 +166,27 @@ router.post("/token", (req, res) => {
 // ======================= ACTIVACIÓN DE CUENTA =======================
 router.post("/activar", async (req, res) => {
   const { email, code } = req.body;
-  const user = await User.findOne({ where: { email, activation_code: code } });
-  if (!user) {
-    return res.status(400).json({ error: "Código o correo incorrecto" });
+  try {
+    const user = await User.findOne({ where: { email, activation_code: code } });
+    if (!user) {
+      return res.status(400).json({ error: "Código o correo incorrecto" });
+    }
+
+    // ADDED: Check if the code has expired
+    if (user.activation_expires_at && new Date() > user.activation_expires_at) {
+      // Optional: you could generate a new code here and ask the user to resend
+      return res.status(400).json({ error: "El código de activación ha expirado. Por favor, solicita uno nuevo." });
+    }
+
+    user.status = "active";
+    user.activation_code = null;
+    user.activation_expires_at = null; // Clear the expiration date as well
+    await user.save();
+    res.json({ message: "Cuenta activada correctamente" });
+  } catch (err) {
+    console.error('Error al activar cuenta:', err);
+    res.status(500).json({ error: "Error al activar cuenta", details: err.message });
   }
-  user.status = "active";
-  user.activation_code = null;
-  await user.save();
-  res.json({ message: "Cuenta activada correctamente" });
 });
 
 // ======================= REENVÍO DE CÓDIGO DE ACTIVACIÓN =======================
@@ -178,14 +205,16 @@ router.post("/reenviar-activacion", async (req, res) => {
       return res.status(400).json({ error: "La cuenta ya está activada" });
     }
 
-    // Genera un nuevo código de activación
-    const newActivationCode = crypto.randomBytes(8).toString("hex"); // Unificado a 32 bytes
+    // Use the new utility to generate a new activation code with expiration
+    const { code: newActivationCode, expiresAt: newActivationExpiresAt } = generateCodeWithExpiration(8, 1440); // 24 hours
+
     user.activation_code = newActivationCode;
+    user.activation_expires_at = newActivationExpiresAt; // Update the expiration date
     await user.save();
 
     await sendActivationEmail(email, newActivationCode);
 
-    res.json({ message: "Código de activación reenviado correctamente" });
+    res.json({ message: "Código de activación reenviado correctamente. Revisa tu correo." });
   } catch (err) {
     res.status(500).json({ error: "Error al reenviar código", details: err.message });
   }
@@ -203,16 +232,16 @@ router.post("/solicitar-reset", async (req, res) => {
       return res.status(404).json({ error: "Usuario no encontrado" });
     }
 
-    let resetCode = user.password_reset_code;
-    if (!resetCode) { // Generar nuevo código solo si no existe uno
-      resetCode = crypto.randomBytes(8).toString("hex"); // Unificado a 32 bytes
-      user.password_reset_code = resetCode;
-      await user.save();
-    }
+    // Use the new utility to generate the reset code with expiration (e.g., 30 minutes)
+    const { code: resetCode, expiresAt: resetExpiresAt } = generateCodeWithExpiration(8, 30); // 30 minutes
+
+    user.password_reset_code = resetCode;
+    user.password_reset_expires_at = resetExpiresAt; // Save the expiration time
+    await user.save();
 
     await sendPasswordResetEmail(email, resetCode);
 
-    res.json({ message: "Código de recuperación enviado correctamente" });
+    res.json({ message: "Código de recuperación enviado correctamente. Revisa tu correo." });
   } catch (err) {
     console.log(err);
     res.status(500).json({ error: "Error al solicitar recuperación", details: err.message });
@@ -230,16 +259,18 @@ router.post("/reenviar-reset", async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: "Usuario no encontrado" });
     }
-    let resetCode = user.password_reset_code;
-    if (!resetCode) { // Generar nuevo código solo si no existe uno
-      resetCode = crypto.randomBytes(8).toString("hex"); // Unificado a 32 bytes
-      user.password_reset_code = resetCode;
-      await user.save();
-    }
-    await sendPasswordResetEmail(email, resetCode);
-    res.json({ message: "Código de recuperación reenviado correctamente" });
+
+    // Reuse the utility to generate a new reset code
+    const { code: newResetCode, expiresAt: newResetExpiresAt } = generateCodeWithExpiration(8, 30); // 30 minutes
+
+    user.password_reset_code = newResetCode;
+    user.password_reset_expires_at = newResetExpiresAt; // Update the expiration date
+    await user.save();
+
+    await sendPasswordResetEmail(email, newResetCode);
+    res.json({ message: "Código de recuperación reenviado correctamente. Revisa tu correo." });
   } catch (err) {
-    res.status(500).json({ error: "Error al reenviar código", details: err.message });
+    res.status(500).json({ error: "Error al reenviar código de recuperación", details: err.message });
   }
 });
 
@@ -255,11 +286,17 @@ router.post("/cambiar-password-reset", async (req, res) => {
   try {
     const user = await User.findOne({ where: { password_reset_code } });
     if (!user) {
-      return res.status(400).json({ error: "Código de recuperación inválido" });
+      return res.status(400).json({ error: "Código de recuperación inválido o ya utilizado" });
+    }
+
+    // ADDED: Check if the reset code has expired
+    if (user.password_reset_expires_at && new Date() > user.password_reset_expires_at) {
+        return res.status(400).json({ error: "El código de recuperación ha expirado. Por favor, solicita uno nuevo." });
     }
 
     user.password = await bcrypt.hash(newPassword, 10);
-    user.password_reset_code = null; // Limpiar el código después de usarlo
+    user.password_reset_code = null; // Clear the code after use
+    user.password_reset_expires_at = null; // Clear the expiration date as well
     await user.save();
 
     res.json({ message: "Contraseña actualizada correctamente" });
@@ -280,6 +317,11 @@ router.post("/verificar-reset", async (req, res) => {
     if (!user) {
       return res.status(400).json({ error: "Código o correo incorrecto" });
     }
+    // ADDED: Check if the reset code has expired
+    if (user.password_reset_expires_at && new Date() > user.password_reset_expires_at) {
+        return res.status(400).json({ error: "El código de recuperación ha expirado. Por favor, solicita uno nuevo." });
+    }
+
     res.json({ message: "Código válido" });
   } catch (err) {
     res.status(500).json({ error: "Error al verificar el código", details: err.message });
