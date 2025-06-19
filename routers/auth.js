@@ -121,12 +121,12 @@ router.post("/login", async (req, res) => {
     }
 
     const accessToken = jwt.sign(
-      { id: user.id, email: user.email, role: user.role, status: user.status },
+      { id: user.id, name: user.name, email: user.email, role: user.role, status: user.status },
       process.env.JWT_SECRET,
       { expiresIn: "1h" }
     );
     const refreshToken = jwt.sign(
-      { id: user.id, email: user.email, role: user.role, status: user.status },
+      {id: user.id, name: user.name, email: user.email, role: user.role, status: user.status  },
       process.env.JWT_REFRESH_SECRET,
       { expiresIn: "7d" }
     );
@@ -155,7 +155,7 @@ router.post("/token", (req, res) => {
     if (err) return res.status(403).json({ error: "Refresh token inválido" });
 
     const accessToken = jwt.sign(
-      { id: user.id, email: user.email, role: user.role, status: user.status },
+      { id: user.id, name: user.name, email: user.email, role: user.role, status: user.status },
       process.env.JWT_SECRET,
       { expiresIn: "1h" }
     );
