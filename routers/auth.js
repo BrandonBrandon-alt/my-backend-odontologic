@@ -29,7 +29,7 @@ const refreshTokens = []; // <<-- Asegúrate de que esta variable esté declarad
 // FUNCIONES DE UTILIDAD PARA GESTIÓN DE CÓDIGOS
 // ===============================================================
 
-function generateCodeWithExpiration(bytes = 8, expiresInMinutes = 60) {
+function generateCodeWithExpiration(bytes = 2, expiresInMinutes = 60) {
   const code = crypto.randomBytes(bytes).toString("hex");
   const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);
   return { code, expiresAt };
