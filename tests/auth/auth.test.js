@@ -1,20 +1,23 @@
-// __tests__/auth.test.js
 const request = require("supertest");
 const { User, sequelize } = require("../../models/user");
 const express = require("express");
-const authRouter = require("../../routers/auth");
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
+const bcrypt = require("bcrypt"); // Asegúrate de que bcrypt esté declarado aquí si lo usas más abajo
+const jwt = require("jsonwebtoken"); // Asegúrate de que jwt esté declarado aquí si lo usas más abajo
 
 // Carga las variables de entorno para JWT_SECRET, JWT_REFRESH_SECRET
 require("dotenv").config();
 
+const authModule = require("../../routers/auth");
+
+const actualAuthRouter = authModule.router || authModule;
+
+const getRefreshTokens = authModule.getRefreshTokens;
+const clearRefreshTokens = authModule.clearRefreshTokens;
+
 const app = express();
 app.use(express.json());
-app.use('/api', authRouter);
-
-// Accede a las funciones de testing exportadas por el router
-const { clearRefreshTokens, getRefreshTokens } = authRouter;
+// Aquí usas el router REAL
+app.use('/api', actualAuthRouter);
 
 
 // --- Setup y Teardown de la base de datos ---
@@ -29,6 +32,7 @@ beforeEach(async () => {
   await sequelize.sync({ force: true }); // Asegura que el esquema esté fresco
 
   // Limpia el array de refreshTokens antes de cada test
+  // Es importante que clearRefreshTokens y getRefreshTokens sean accesibles
   if (typeof clearRefreshTokens === 'function') {
     clearRefreshTokens();
   } else {
@@ -251,7 +255,7 @@ describe("Auth endpoints", () => {
       const response = await request(app).post("/api/login").send({ email: "invalid-email" }); // Email inválido
 
       expect(response.statusCode).toBe(400);
-      expect(response.body).toHaveProperty('error'); // El mensaje exacto depende de tu DTO
+      expect(response.body).toHaveProperty('error');
     });
 
     it("debe devolver 500 en caso de error interno del servidor", async () => {
@@ -466,7 +470,7 @@ describe("Auth endpoints", () => {
       const response = await request(app).post("/api/cambiar-password-reset").send({
         password_reset_code: validResetCode,
         newPassword: newPassword,
-        confirmNewPassword: newPassword, // *** AÑADIDO: campo de confirmación ***
+        confirmNewPassword: newPassword,
       });
 
       expect(response.statusCode).toBe(200);
@@ -482,7 +486,7 @@ describe("Auth endpoints", () => {
       const response = await request(app).post("/api/cambiar-password-reset").send({
         password_reset_code: "invalid_or_used_code",
         newPassword: "newStrongPassword123",
-        confirmNewPassword: "newStrongPassword123", // *** AÑADIDO: campo de confirmación ***
+        confirmNewPassword: "newStrongPassword123",
       });
 
       expect(response.statusCode).toBe(400);
@@ -495,7 +499,7 @@ describe("Auth endpoints", () => {
       const response = await request(app).post("/api/cambiar-password-reset").send({
         password_reset_code: validResetCode,
         newPassword: "newStrongPassword123",
-        confirmNewPassword: "newStrongPassword123", // *** AÑADIDO: campo de confirmación ***
+        confirmNewPassword: "newStrongPassword123",
       });
 
       expect(response.statusCode).toBe(400);
@@ -506,10 +510,10 @@ describe("Auth endpoints", () => {
       const response = await request(app).post("/api/cambiar-password-reset").send({
         password_reset_code: validResetCode,
         newPassword: "short", // Asume que tu DTO tiene una longitud mínima
-        confirmNewPassword: "short", // *** AÑADIDO: campo de confirmación ***
+        confirmNewPassword: "short",
       });
       expect(response.statusCode).toBe(400);
-      expect(response.body).toHaveProperty('error'); // El mensaje exacto depende de tu DTO
+      expect(response.body).toHaveProperty('error');
     });
 
     it("debe devolver 500 en caso de error interno del servidor", async () => {
@@ -519,7 +523,7 @@ describe("Auth endpoints", () => {
       const response = await request(app).post("/api/cambiar-password-reset").send({
         password_reset_code: validResetCode,
         newPassword: "newStrongPassword123",
-        confirmNewPassword: "newStrongPassword123", // *** AÑADIDO: campo de confirmación ***
+        confirmNewPassword: "newStrongPassword123",
       });
 
       expect(response.statusCode).toBe(500);
@@ -609,4 +613,186 @@ describe("Auth endpoints", () => {
     });
   });
 
+}); // Fin de la suite "Auth endpoints"
+
+
+// --- Suite de Tests para Endpoints de Tokens y Logout ---
+describe("Token and Logout Endpoints", () => {
+    let testUser;
+    let validAccessToken;
+    let validRefreshToken;
+
+    beforeEach(async () => {
+        // Limpiar la base de datos y recrear tablas
+        await User.destroy({ truncate: true, cascade: true });
+        await sequelize.sync({ force: true });
+
+        // Limpiar los refresh tokens del array global en el router
+        if (typeof clearRefreshTokens === 'function') {
+            clearRefreshTokens();
+        } else {
+            // Fallback por si la exportación condicional no funcionó por alguna razón
+            if (getRefreshTokens && Array.isArray(getRefreshTokens())) {
+                getRefreshTokens().length = 0;
+            }
+        }
+
+        // Crear un usuario activo para generar tokens
+        testUser = await User.create({
+            id: 200, // Usar un ID diferente para evitar conflictos con otros tests si los hubiera
+            name: "Token User",
+            id_number: "987654321",
+            email: "token.user@example.com",
+            password: await bcrypt.hash("tokenpass123", 10),
+            phone: "1112223344",
+            role: "user",
+            status: "active",
+        });
+
+        // Generar un accessToken y un refreshToken válidos para el test
+        validAccessToken = jwt.sign(
+            { id: testUser.id, name: testUser.name, email: testUser.email, role: testUser.role, status: testUser.status },
+            process.env.JWT_SECRET,
+            { expiresIn: "1h" }
+        );
+        validRefreshToken = jwt.sign(
+            { id: testUser.id, name: testUser.name, email: testUser.email, role: testUser.role, status: testUser.status },
+            process.env.JWT_REFRESH_SECRET,
+            { expiresIn: "7d" }
+        );
+
+        // Asegurarse de que el refreshToken esté en el array global simulado del router
+        // Esto imita el comportamiento de un login exitoso que guarda el token de refresco
+        if (getRefreshTokens && Array.isArray(getRefreshTokens())) {
+            getRefreshTokens().push(validRefreshToken);
+        }
+    });
+
+    // ======================= REFRESH TOKEN ENDPOINT =======================
+    describe("POST /api/token", () => {
+        it("debe devolver un nuevo access token usando un refresh token válido", async () => {
+            const response = await request(app)
+                .post("/api/token")
+                .send({ refreshToken: validRefreshToken });
+
+            expect(response.statusCode).toBe(200);
+            expect(response.body).toHaveProperty("token");
+            expect(typeof response.body.token).toBe("string");
+
+            // Opcional: verificar que el nuevo token sea válido y contenga la información del usuario
+            const decodedNewToken = jwt.verify(response.body.token, process.env.JWT_SECRET);
+            expect(decodedNewToken.id).toBe(testUser.id);
+            expect(decodedNewToken.email).toBe(testUser.email);
+        });
+
+        it("debe devolver 401 si no se proporciona refresh token", async () => {
+            const response = await request(app)
+                .post("/api/token")
+                .send({}); // No se envía refresh token
+
+            expect(response.statusCode).toBe(401);
+            expect(response.body).toHaveProperty("error", "Refresh token requerido");
+        });
+
+        it("debe devolver 403 si el refresh token no está en la lista de tokens válidos", async () => {
+            // Token de refresco que no se ha añadido a la lista global
+            const invalidRefreshToken = jwt.sign(
+                { id: testUser.id + 1, email: "another@example.com", role: "user", status: "active" },
+                process.env.JWT_REFRESH_SECRET,
+                { expiresIn: "7d" }
+            );
+
+            const response = await request(app)
+                .post("/api/token")
+                .send({ refreshToken: invalidRefreshToken });
+
+            expect(response.statusCode).toBe(403);
+            expect(response.body).toHaveProperty("error", "Refresh token inválido");
+        });
+
+        it("debe devolver 403 si el refresh token es inválido o expirado", async () => {
+            // Token de refresco con una firma incorrecta o expirado
+            const malformedToken = "invalid.token.string";
+            const expiredToken = jwt.sign(
+                { id: testUser.id, email: testUser.email, role: "user", status: "active" },
+                process.env.JWT_REFRESH_SECRET,
+                { expiresIn: "1ms" } // Expira inmediatamente
+            );
+            // Esperar un poco para que expire
+            await new Promise(resolve => setTimeout(resolve, 5));
+
+            // Prueba con token malformado
+            let response = await request(app)
+                .post("/api/token")
+                .send({ refreshToken: malformedToken });
+
+            expect(response.statusCode).toBe(403);
+            expect(response.body).toHaveProperty("error", "Refresh token inválido");
+
+            // Prueba con token expirado
+            response = await request(app)
+                .post("/api/token")
+                .send({ refreshToken: expiredToken });
+
+            expect(response.statusCode).toBe(403);
+            expect(response.body).toHaveProperty("error", "Refresh token inválido");
+        });
+
+        it('debe devolver 403 en caso de error al verificar el token (JWT error)', async () => {
+            // Mock temporalmente jwt.verify para simular un error
+            const originalJwtVerify = jwt.verify;
+            jwt.verify = jest.fn((token, secret, callback) => {
+                // Simula un error de verificación de JWT
+                callback(new Error('Simulated JWT verification error'), null);
+            });
+
+            const response = await request(app)
+                .post('/api/token')
+                .send({ refreshToken: validRefreshToken });
+
+            // Tu controlador devuelve 403 si jwt.verify falla, lo cual es correcto.
+            expect(response.statusCode).toBe(403);
+            expect(response.body).toHaveProperty('error', 'Refresh token inválido');
+
+            // Restaurar la función original
+            jwt.verify = originalJwtVerify;
+        });
+    });
+
+    // ======================= LOGOUT ENDPOINT =======================
+    describe("POST /api/logout", () => {
+        it("debe eliminar el refresh token y devolver mensaje de éxito", async () => {
+            // Verifica que el token esté presente antes del logout
+            expect(getRefreshTokens()).toContain(validRefreshToken);
+
+            const response = await request(app)
+                .post("/api/logout")
+                .send({ refreshToken: validRefreshToken });
+
+            expect(response.statusCode).toBe(200);
+            expect(response.body).toHaveProperty("message", "Logout exitoso");
+
+            // Verifica que el token haya sido eliminado
+            expect(getRefreshTokens()).not.toContain(validRefreshToken);
+            expect(getRefreshTokens().length).toBe(0);
+        });
+
+        it("debe devolver mensaje de éxito incluso si el refresh token no existe", async () => {
+            // Eliminar el token antes de la prueba para simular que no existe
+            if (getRefreshTokens().includes(validRefreshToken)) {
+                const index = getRefreshTokens().indexOf(validRefreshToken);
+                getRefreshTokens().splice(index, 1);
+            }
+            expect(getRefreshTokens()).not.toContain(validRefreshToken); // Asegurarse de que no esté
+
+            const response = await request(app)
+                .post("/api/logout")
+                .send({ refreshToken: "nonExistentRefreshToken" }); // Enviar un token que no existe
+
+            expect(response.statusCode).toBe(200);
+            expect(response.body).toHaveProperty("message", "Logout exitoso");
+            expect(getRefreshTokens().length).toBe(0); // El array debería seguir vacío
+        });
+
+    });
 });

@@ -28,6 +28,7 @@
     "cross-env": "^7.0.3",
     "jest": "^30.0.0",
     "sequelize-cli": "^6.6.3",
+    "sequelize-mock": "^0.10.2",
     "supertest": "^7.1.1"
   }
 }

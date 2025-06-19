@@ -1,14 +1,14 @@
 // routers/auth.js
 
 const express = require("express");
-const router = express.Router();
+const router = express.Router(); // <<-- Define el router aquí
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const { Op } = require("sequelize");
 
 // Importa los middlewares y los DTOs
-const { authenticateToken } = require('../middleware/authMiddleware'); // CORRECTO: Ajusta la ruta si es necesario
+const { authenticateToken } = require('../middleware/authMiddleware');
 // const { authorizeRoles } = require('../middleware/authMiddleware'); // Importa authorizeRoles si lo usas en este router
 const createUser = require("../dto/registroDTO");
 const login = require("../dto/loginDTO");
@@ -23,7 +23,7 @@ const { sendActivationEmail, sendPasswordResetEmail } = require("../utils/mailer
 console.log('NODE_ENV when auth router is loaded:', process.env.NODE_ENV); // Esto está bien para depuración
 
 // Variable para almacenar refresh tokens (en un entorno real, esto sería una base de datos o caché)
-const refreshTokens = [];
+const refreshTokens = []; // <<-- Asegúrate de que esta variable esté declarada aquí
 
 // ===============================================================
 // FUNCIONES DE UTILIDAD PARA GESTIÓN DE CÓDIGOS
@@ -146,6 +146,7 @@ router.post("/token", (req, res) => {
   jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET, (err, user) => {
     if (err) return res.status(403).json({ error: "Refresh token inválido" });
 
+    // Re-generar un accessToken con la misma información del usuario del refreshToken
     const accessToken = jwt.sign(
       { id: user.id, name: user.name, email: user.email, role: user.role, status: user.status },
       process.env.JWT_SECRET,
@@ -334,12 +335,18 @@ router.post("/logout", (req, res) => {
   console.log('<<< Exiting POST /logout >>>');
 });
 
-// ======================= EXPORTACIONES PARA TESTING (Solo en entorno de prueba) =======================
-// Este bloque debe ser el ÚLTIMO en asignar a module.exports.
-// Las funciones auxiliares solo se exportan si es NODE_ENV === 'test'
+// ======================= EXPORTACIONES =======================
+// Este bloque final maneja la exportación del módulo.
+// EXPORTACIÓN CONDICIONAL:
+// Si NODE_ENV es 'test', exporta un OBJETO con el router y las funciones de testing.
+// De lo contrario (ej. 'development', 'production'), solo exporta el router.
 if (process.env.NODE_ENV === 'test') {
-    module.exports.getRefreshTokens = () => refreshTokens;
-    module.exports.clearRefreshTokens = () => { refreshTokens.length = 0; };
+  module.exports = {
+    router: router, // El objeto Express Router
+    getRefreshTokens: () => refreshTokens, // Función para obtener los tokens de refresco (solo para tests)
+    clearRefreshTokens: () => { refreshTokens.length = 0; }, // Función para limpiar los tokens de refresco (solo para tests)
+  };
+} else {
+  // Para producción o desarrollo, simplemente exporta el router
+  module.exports = router;
 }
-
-module.exports = router; // Esta debe ser la ÚLTIMA exportación del router.
