@@ -1,55 +1,50 @@
+// routers/auth.js
+
 const express = require("express");
 const router = express.Router();
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
-const { Op } = require("sequelize"); // Asegúrate de que Op esté disponible
+const { Op } = require("sequelize");
 
-const createUser = require("../dto/registroDTO"); // <-- CORRECCIÓN: 'dtos' (plural) y 'createUser.dto'
+// Importa los middlewares y los DTOs
+const { authenticateToken } = require('../middleware/authMiddleware'); // CORRECTO: Ajusta la ruta si es necesario
+// const { authorizeRoles } = require('../middleware/authMiddleware'); // Importa authorizeRoles si lo usas en este router
+const createUser = require("../dto/registroDTO");
 const login = require("../dto/loginDTO");
-const resetPassword = require("../dto/resetPasswordDTO");
+const resetPassword = require("../dto/resetPasswordDTO"); // Usado para el DTO de cambiar-password-reset
 
-// Importa tu modelo de usuario (ajusta la ruta según tu estructura real)
+// Importa tu modelo de usuario
 const { User } = require("../models/user");
 
-// Importa tu módulo de mailer (ajusta la ruta según tu estructura real)
-const {
-  sendActivationEmail,
-  sendPasswordResetEmail
-} = require("../utils/mailer");
+// Importa tu módulo de mailer
+const { sendActivationEmail, sendPasswordResetEmail } = require("../utils/mailer");
+
+console.log('NODE_ENV when auth router is loaded:', process.env.NODE_ENV); // Esto está bien para depuración
 
 // Variable para almacenar refresh tokens (en un entorno real, esto sería una base de datos o caché)
 const refreshTokens = [];
 
 // ===============================================================
-// NUEVAS FUNCIONES DE UTILIDAD PARA GESTIÓN DE CÓDIGOS
+// FUNCIONES DE UTILIDAD PARA GESTIÓN DE CÓDIGOS
 // ===============================================================
 
-/**
- * Generates a random code and an expiration time.
- * @param {number} bytes - Number of bytes to generate the code (e.g., 8 for 16 hex characters).
- * @param {number} expiresInMinutes - Code validity duration in minutes.
- * @returns {{code: string, expiresAt: Date}}
- */
 function generateCodeWithExpiration(bytes = 8, expiresInMinutes = 60) {
   const code = crypto.randomBytes(bytes).toString("hex");
-  const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000); // Adds minutes to the current date
+  const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);
   return { code, expiresAt };
 }
 
 // ======================= REGISTRO =======================
 router.post("/registro", async (req, res) => {
   try {
-    // 1. Validate the request body data with Joi
     const { error } = createUser.validate(req.body);
     if (error) {
       return res.status(400).json({ error: error.details[0].message });
     }
 
-    // 2. Destructure all fields
     const { name, idNumber, email, password, phone, address, birth_date } = req.body;
 
-    // 3. Check if a user with that id_number or email already exists
     const exists = await User.findOne({
       where: {
         [Op.or]: [{ id_number: idNumber }, { email }],
@@ -62,10 +57,8 @@ router.post("/registro", async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    // Use the new utility to generate the activation code with expiration (e.g., 24 hours)
-    const { code: activationCode, expiresAt: activationExpiresAt } = generateCodeWithExpiration(8, 1440); // 1440 minutes = 24 hours
+    const { code: activationCode, expiresAt: activationExpiresAt } = generateCodeWithExpiration(8, 1440); // 24 hours
 
-    // 4. Create the object to save to the database
     const userToCreate = {
       name,
       id_number: idNumber,
@@ -73,13 +66,12 @@ router.post("/registro", async (req, res) => {
       password: hashedPassword,
       phone,
       address: address || null,
-      // Ensure that birth_date is converted to Date if it exists
       birth_date: birth_date ? new Date(birth_date) : null,
-      profile_picture: null, // Assign null as no image will be uploaded in this flow
+      profile_picture: null,
       role: "user",
       status: "inactive",
       activation_code: activationCode,
-      activation_expires_at: activationExpiresAt, // Save the expiration time
+      activation_expires_at: activationExpiresAt,
     };
 
     const user = await User.create(userToCreate);
@@ -126,7 +118,7 @@ router.post("/login", async (req, res) => {
       { expiresIn: "1h" }
     );
     const refreshToken = jwt.sign(
-      {id: user.id, name: user.name, email: user.email, role: user.role, status: user.status  },
+      { id: user.id, name: user.name, email: user.email, role: user.role, status: user.status },
       process.env.JWT_REFRESH_SECRET,
       { expiresIn: "7d" }
     );
@@ -172,15 +164,13 @@ router.post("/activar", async (req, res) => {
       return res.status(400).json({ error: "Código o correo incorrecto" });
     }
 
-    // ADDED: Check if the code has expired
     if (user.activation_expires_at && new Date() > user.activation_expires_at) {
-      // Optional: you could generate a new code here and ask the user to resend
       return res.status(400).json({ error: "El código de activación ha expirado. Por favor, solicita uno nuevo." });
     }
 
     user.status = "active";
     user.activation_code = null;
-    user.activation_expires_at = null; // Clear the expiration date as well
+    user.activation_expires_at = null;
     await user.save();
     res.json({ message: "Cuenta activada correctamente" });
   } catch (err) {
@@ -205,11 +195,10 @@ router.post("/reenviar-activacion", async (req, res) => {
       return res.status(400).json({ error: "La cuenta ya está activada" });
     }
 
-    // Use the new utility to generate a new activation code with expiration
-    const { code: newActivationCode, expiresAt: newActivationExpiresAt } = generateCodeWithExpiration(8, 1440); // 24 hours
+    const { code: newActivationCode, expiresAt: newActivationExpiresAt } = generateCodeWithExpiration(8, 1440);
 
     user.activation_code = newActivationCode;
-    user.activation_expires_at = newActivationExpiresAt; // Update the expiration date
+    user.activation_expires_at = newActivationExpiresAt;
     await user.save();
 
     await sendActivationEmail(email, newActivationCode);
@@ -232,11 +221,10 @@ router.post("/solicitar-reset", async (req, res) => {
       return res.status(404).json({ error: "Usuario no encontrado" });
     }
 
-    // Use the new utility to generate the reset code with expiration (e.g., 30 minutes)
-    const { code: resetCode, expiresAt: resetExpiresAt } = generateCodeWithExpiration(8, 30); // 30 minutes
+    const { code: resetCode, expiresAt: resetExpiresAt } = generateCodeWithExpiration(8, 30);
 
     user.password_reset_code = resetCode;
-    user.password_reset_expires_at = resetExpiresAt; // Save the expiration time
+    user.password_reset_expires_at = resetExpiresAt;
     await user.save();
 
     await sendPasswordResetEmail(email, resetCode);
@@ -260,11 +248,10 @@ router.post("/reenviar-reset", async (req, res) => {
       return res.status(404).json({ error: "Usuario no encontrado" });
     }
 
-    // Reuse the utility to generate a new reset code
-    const { code: newResetCode, expiresAt: newResetExpiresAt } = generateCodeWithExpiration(8, 30); // 30 minutes
+    const { code: newResetCode, expiresAt: newResetExpiresAt } = generateCodeWithExpiration(8, 30);
 
     user.password_reset_code = newResetCode;
-    user.password_reset_expires_at = newResetExpiresAt; // Update the expiration date
+    user.password_reset_expires_at = newResetExpiresAt;
     await user.save();
 
     await sendPasswordResetEmail(email, newResetCode);
@@ -289,14 +276,13 @@ router.post("/cambiar-password-reset", async (req, res) => {
       return res.status(400).json({ error: "Código de recuperación inválido o ya utilizado" });
     }
 
-    // ADDED: Check if the reset code has expired
     if (user.password_reset_expires_at && new Date() > user.password_reset_expires_at) {
         return res.status(400).json({ error: "El código de recuperación ha expirado. Por favor, solicita uno nuevo." });
     }
 
     user.password = await bcrypt.hash(newPassword, 10);
-    user.password_reset_code = null; // Clear the code after use
-    user.password_reset_expires_at = null; // Clear the expiration date as well
+    user.password_reset_code = null;
+    user.password_reset_expires_at = null;
     await user.save();
 
     res.json({ message: "Contraseña actualizada correctamente" });
@@ -317,7 +303,6 @@ router.post("/verificar-reset", async (req, res) => {
     if (!user) {
       return res.status(400).json({ error: "Código o correo incorrecto" });
     }
-    // ADDED: Check if the reset code has expired
     if (user.password_reset_expires_at && new Date() > user.password_reset_expires_at) {
         return res.status(400).json({ error: "El código de recuperación ha expirado. Por favor, solicita uno nuevo." });
     }
@@ -330,10 +315,31 @@ router.post("/verificar-reset", async (req, res) => {
 
 // ======================= LOGOUT (Opcional) =======================
 router.post("/logout", (req, res) => {
+  console.log('>>> Inside POST /logout <<<');
   const { refreshToken } = req.body;
+  console.log('Received refreshToken in request body:', refreshToken);
+  console.log('Current refreshTokens array BEFORE removal:', refreshTokens);
+
   const index = refreshTokens.indexOf(refreshToken);
-  if (index > -1) refreshTokens.splice(index, 1);
+  console.log('Index found for refreshToken:', index);
+
+  if (index > -1) {
+    refreshTokens.splice(index, 1);
+    console.log('refreshToken removed. Array AFTER removal:', refreshTokens);
+  } else {
+    console.log('refreshToken not found in array (index is -1). Array remains:', refreshTokens);
+  }
+
   res.json({ message: "Logout exitoso" });
+  console.log('<<< Exiting POST /logout >>>');
 });
 
-module.exports = router;
+// ======================= EXPORTACIONES PARA TESTING (Solo en entorno de prueba) =======================
+// Este bloque debe ser el ÚLTIMO en asignar a module.exports.
+// Las funciones auxiliares solo se exportan si es NODE_ENV === 'test'
+if (process.env.NODE_ENV === 'test') {
+    module.exports.getRefreshTokens = () => refreshTokens;
+    module.exports.clearRefreshTokens = () => { refreshTokens.length = 0; };
+}
+
+module.exports = router; // Esta debe ser la ÚLTIMA exportación del router.
