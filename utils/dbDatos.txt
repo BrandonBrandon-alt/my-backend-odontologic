@@ -1,5 +1,0 @@
-postgres=# CREATE USER dev_user WITH PASSWORD 'C@ntraseña123' CREATEDB;
-CREATE ROLE
-postgres=# CREATE DATABASE mi_app_db OWNER dev_user;
-CREATE DATABASE
-postgres=#

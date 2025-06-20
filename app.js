@@ -17,12 +17,3 @@ app.use('/api', authRouter); // Prefijo '/api' para tus rutas de autenticación
 app.use('/api/user', userRouter); // Prefijo '/api/user' para tus rutas de usuario
 
 module.exports = app;
-
-// index.js (Este archivo está bien)
-// const app = require('./app');
-
-// const PORT = process.env.PORT || 3000;
-
-// app.listen(PORT, () => {
-//   console.log(`Servidor escuchando en http://localhost:${PORT}`);
-// });
