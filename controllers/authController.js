@@ -19,8 +19,29 @@ function generateCodeWithExpiration(bytes = 2, expiresInMinutes = 60) {
     return { code, expiresAt };
 }
 
+async function verifyRecaptcha(token) {
+    const secret = "6LdW4mcrAAAAAD2fb4fbXR9HIzYoBz6D_L06JgxP";
+    const url = `https://www.google.com/recaptcha/api/siteverify?secret=${secret}&response=${token}`;
+    try {
+        const response = await axios.post(url);
+        return {
+            success: response.data.success,
+            score: response.data.score,
+            action: response.data.action
+        };
+    } catch (error) {
+        return { success: false, score: 0, action: null };
+    }
+}
 const register = async (req, res) => {
     try {
+
+        const { captchaToken } = req.body;
+        const recaptchaResult = await verifyRecaptcha(captchaToken);
+        if (!recaptchaResult.success || recaptchaResult.score < 0.5) {
+            return res.status(400).json({ error: "Verificación de reCAPTCHA fallida o actividad sospechosa. Intenta de nuevo." });
+        }
+
         const { error } = createUserDTO.validate(req.body);
         if (error) {
             return res.status(400).json({ error: error.details[0].message });
@@ -80,6 +101,13 @@ const login = async (req, res) => {
     const { email, password } = req.body;
 
     try {
+
+        const { captchaToken } = req.body;
+        const recaptchaResult = await verifyRecaptcha(captchaToken);
+        if (!recaptchaResult.success || recaptchaResult.score < 0.5) {
+            return res.status(400).json({ error: "Verificación de reCAPTCHA fallida o actividad sospechosa. Intenta de nuevo." });
+        }
+
         const user = await User.findOne({ where: { email } });
         if (!user) {
             return res.status(400).json({ error: "Usuario no encontrado" });
