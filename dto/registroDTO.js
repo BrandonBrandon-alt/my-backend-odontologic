@@ -64,6 +64,7 @@ const createUser = Joi.object({
       'date.iso': 'La fecha de nacimiento debe estar en formato ISO (YYYY-MM-DD)',
       'any.required': 'La fecha de nacimiento es obligatoria', // <--- NUEVO
     }),
+  captchaToken: Joi.string().optional(),
 });
 
 module.exports = createUser;

@@ -7,7 +7,8 @@ const createUserDTO = require("../dto/registroDTO");
 const loginDTO = require("../dto/loginDTO");
 const resetPasswordDTO = require("../dto/resetPasswordDTO");
 
-const { User } = require("../models/user");
+const { User } = require("../models/user")
+
 
 const { sendActivationEmail, sendPasswordResetEmail } = require("../utils/mailer");
 
@@ -20,17 +21,24 @@ function generateCodeWithExpiration(bytes = 2, expiresInMinutes = 60) {
 }
 
 async function verifyRecaptcha(token) {
-    const secret = "6LdW4mcrAAAAAD2fb4fbXR9HIzYoBz6D_L06JgxP";
-    const url = `https://www.google.com/recaptcha/api/siteverify?secret=${secret}&response=${token}`;
+    const secret = process.env.RECAPTCHA_SECRET_KEY ;
+    const url = "https://www.google.com/recaptcha/api/siteverify";
     try {
-        const response = await axios.post(url);
-        return {
-            success: response.data.success,
-            score: response.data.score,
-            action: response.data.action
-        };
+        const response = await axios.post(
+            url,
+            null,
+            {
+                params: {
+                    secret: secret,
+                    response: token,
+                },
+            }
+        );
+        console.log("Respuesta de Google reCAPTCHA:", response.data); // <-- Agrega esto
+        return response.data;
     } catch (error) {
-        return { success: false, score: 0, action: null };
+        console.error("Error al verificar reCAPTCHA:", error);
+        return { success: false };
     }
 }
 const register = async (req, res) => {
@@ -38,9 +46,10 @@ const register = async (req, res) => {
 
         const { captchaToken } = req.body;
         const recaptchaResult = await verifyRecaptcha(captchaToken);
-        if (!recaptchaResult.success || recaptchaResult.score < 0.5) {
-            return res.status(400).json({ error: "Verificación de reCAPTCHA fallida o actividad sospechosa. Intenta de nuevo." });
+        if (!recaptchaResult) {
+            return res.status(400).json({ error: "Verificación de reCAPTCHA fallida. Intenta de nuevo." });
         }
+        console.log("Respuesta de Google reCAPTCHA:", recaptchaResult);
 
         const { error } = createUserDTO.validate(req.body);
         if (error) {
@@ -76,6 +85,7 @@ const register = async (req, res) => {
             status: "inactive",
             activation_code: activationCode,
             activation_expires_at: activationExpiresAt,
+            captcha_token: captchaToken,
         };
 
         const user = await User.create(userToCreate);
@@ -104,9 +114,10 @@ const login = async (req, res) => {
 
         const { captchaToken } = req.body;
         const recaptchaResult = await verifyRecaptcha(captchaToken);
-        if (!recaptchaResult.success || recaptchaResult.score < 0.5) {
-            return res.status(400).json({ error: "Verificación de reCAPTCHA fallida o actividad sospechosa. Intenta de nuevo." });
+        if (!recaptchaResult) {
+            return res.status(400).json({ error: "Verificación de reCAPTCHA fallida. Intenta de nuevo." });
         }
+        console.log("Respuesta de Google reCAPTCHA:", recaptchaResult);
 
         const user = await User.findOne({ where: { email } });
         if (!user) {

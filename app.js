@@ -8,7 +8,7 @@ const app = express();
 // Configuración de CORS
 app.use(cors({
     // CAMBIAR A LA URL DONDE REALMENTE CORRE TU FRONTEND (Vite)
-    origin: 'http://localhost:5173', // <--- ¡CAMBIADO A 5173!
+    origin: 'http://localhost:5174', // <--- ¡CAMBIADO A 5173!
     credentials: true // Si necesitas enviar cookies o cabeceras de autorización
 }));
 
