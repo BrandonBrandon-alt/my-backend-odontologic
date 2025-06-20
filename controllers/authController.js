@@ -7,7 +7,8 @@ const createUserDTO = require("../dto/registroDTO");
 const loginDTO = require("../dto/loginDTO");
 const resetPasswordDTO = require("../dto/resetPasswordDTO");
 
-const { User } = require("../models/user");
+const { User } = require("../models/user")
+
 
 const { sendActivationEmail, sendPasswordResetEmail } = require("../utils/mailer");
 
@@ -19,9 +20,38 @@ function generateCodeWithExpiration(bytes = 2, expiresInMinutes = 60) {
     return { code, expiresAt };
 }
 
+async function verifyRecaptcha(token) {
+    const secret = process.env.RECAPTCHA_SECRET_KEY ;
+    const url = "https://www.google.com/recaptcha/api/siteverify";
+    try {
+        const response = await axios.post(
+            url,
+            null,
+            {
+                params: {
+                    secret: secret,
+                    response: token,
+                },
+            }
+        );
+        console.log("Respuesta de Google reCAPTCHA:", response.data); // <-- Agrega esto
+        return response.data;
+    } catch (error) {
+        console.error("Error al verificar reCAPTCHA:", error);
+        return { success: false };
+    }
+}
 const register = async (req, res) => {
     try {
-        const { error } = createUserDTO.validate(req.body);
+
+        const { captchaToken } = req.body;
+        const recaptchaResult = await verifyRecaptcha(captchaToken);
+        if (!recaptchaResult) {
+            return res.status(400).json({ error: "Verificación de reCAPTCHA fallida. Intenta de nuevo." });
+        }
+        console.log("Respuesta de Google reCAPTCHA:", recaptchaResult);
+
+        const { error } = createUserDTO.validate(req.body, { allowUnknown: true });
         if (error) {
             return res.status(400).json({ error: error.details[0].message });
         }
@@ -80,6 +110,14 @@ const login = async (req, res) => {
     const { email, password } = req.body;
 
     try {
+
+        const { captchaToken } = req.body;
+        const recaptchaResult = await verifyRecaptcha(captchaToken);
+        if (!recaptchaResult) {
+            return res.status(400).json({ error: "Verificación de reCAPTCHA fallida. Intenta de nuevo." });
+        }
+        console.log("Respuesta de Google reCAPTCHA:", recaptchaResult);
+
         const user = await User.findOne({ where: { email } });
         if (!user) {
             return res.status(400).json({ error: "Usuario no encontrado" });
