@@ -51,7 +51,7 @@ const register = async (req, res) => {
         }
         console.log("Respuesta de Google reCAPTCHA:", recaptchaResult);
 
-        const { error } = createUserDTO.validate(req.body);
+        const { error } = createUserDTO.validate(req.body, { allowUnknown: true });
         if (error) {
             return res.status(400).json({ error: error.details[0].message });
         }
@@ -85,7 +85,6 @@ const register = async (req, res) => {
             status: "inactive",
             activation_code: activationCode,
             activation_expires_at: activationExpiresAt,
-            captcha_token: captchaToken,
         };
 
         const user = await User.create(userToCreate);
