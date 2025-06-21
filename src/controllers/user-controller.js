@@ -1,6 +1,6 @@
 const { User } = require('../models/user-model');
-const resetPassword = require('../dto/changed-password-dto');
-const updateProfileJoiSchema = require('../dto/update-profile-dto');
+const resetPassword = require('../dtos/changed-password-dto');
+const updateProfileJoiSchema = require('../dtos/update-profile-dto');
 const bcrypt = require('bcrypt');
 
 const getProfile = async (req, res) => {

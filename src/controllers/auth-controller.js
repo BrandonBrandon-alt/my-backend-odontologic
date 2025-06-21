@@ -1,11 +1,12 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
+const axios = require("axios");
 const { Op } = require("sequelize");
 
-const createUserDTO = require('../dto/registro-dto');
-const loginDTO = require('../dto/login-dto');
-const resetPasswordDTO = require('../dto/reset-password-dto');
+const createUserDTO = require('../dtos/registro-dto');
+const loginDTO = require('../dtos/login-dto');
+const resetPasswordDTO = require('../dtos/reset-password-dto');
 const { User } = require('../models/user-model')
 const { sendActivationEmail, sendPasswordResetEmail } = require('../utils/mailer');
 

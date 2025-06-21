@@ -12,6 +12,12 @@ const sequelize = new Sequelize(
 );
 
 const User = sequelize.define("User", {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true,
+    allowNull: false
+  },
   name: { type: DataTypes.STRING, allowNull: false },
   id_number: { type: DataTypes.STRING, allowNull: false, unique: true },
   email: { type: DataTypes.STRING, allowNull: false, unique: true },
