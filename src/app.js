@@ -1,8 +1,8 @@
 // filepath: app.js
 const express = require('express');
 const cors = require('cors');
-const authRouter = require('./routers/auth');
-const userRouter = require('./routers/user');
+const authRouter = require('./routers/auth-router');
+const userRouter = require('./routers/user-router');
 const app = express();
 
 // Configuración de CORS

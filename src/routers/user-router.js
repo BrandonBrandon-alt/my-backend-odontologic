@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../middleware/authMiddleware');
-const userController = require('../controllers/userController');
+const { authenticateToken } = require('../middleware/auth-middleware');
+const userController = require('../controllers/user-controller');
 
 // ======================= RUTAS DE USUARIO =======================
 router.get('/perfil', authenticateToken, userController.getProfile);

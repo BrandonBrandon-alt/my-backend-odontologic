@@ -6,8 +6,8 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
-const userRoutes = require('../../routers/user');
-const { User, sequelize } = require('../../models/user');
+const userRoutes = require('../routers/user-router');
+const { User, sequelize } = require('../models/user-model');
 
 const app = express();
 app.use(express.json());

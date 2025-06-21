@@ -1,12 +1,12 @@
 const request = require("supertest");
-const { User, sequelize } = require("../../models/user");
+const { User, sequelize } = require('../models/user-model');
 const express = require("express");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
 require("dotenv").config();
 
-const authModule = require("../../routers/auth");
+const authModule = require('../routers/auth-router');
 
 const actualAuthRouter = authModule.router || authModule;
 const getRefreshTokens = authModule.getRefreshTokens;
