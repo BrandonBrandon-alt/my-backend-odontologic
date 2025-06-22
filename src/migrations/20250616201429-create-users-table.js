@@ -54,8 +54,16 @@ module.exports = {
         type: Sequelize.STRING,
         allowNull: true
       },
+      activation_expires_at: {
+        type: Sequelize.DATE,
+        allowNull: true
+      },
       password_reset_code: {
         type: Sequelize.STRING,
+        allowNull: true
+      },
+      password_reset_expires_at: {
+        type: Sequelize.DATE,
         allowNull: true
       },
       createdAt: {
