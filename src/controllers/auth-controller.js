@@ -78,7 +78,6 @@ const register = async (req, res) => {
             phone,
             address: address || null,
             birth_date: birth_date ? new Date(birth_date) : null,
-            profile_picture: null,
             role: "user",
             status: "inactive",
             activation_code: activationCode,
@@ -158,7 +157,7 @@ const refreshToken = (req, res) => {
     if (!refreshToken)
         return res.status(401).json({ error: "Refresh token requerido" });
     if (!refreshTokens.includes(refreshToken))
-        return res.status(403).json({ error: "Refresh token inválido" });
+        return res.status(401).json({ error: "Refresh token inválido" });
 
     jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET, (err, user) => {
         if (err) return res.status(403).json({ error: "Refresh token inválido" });
@@ -330,23 +329,23 @@ const logout = (req, res) => {
     if (index > -1) {
         refreshTokens.splice(index, 1);
     }
-    res.json({ message: "Logout exitoso" });
+    res.json({ success: true, message: "Logout exitoso" });
 };
 
 const getRefreshTokens = () => refreshTokens;
 const clearRefreshTokens = () => { refreshTokens.length = 0; };
 
 module.exports = {
-    register,
+    registro: register,
+    activar: activateAccount,
     login,
-    refreshToken,
-    activateAccount,
+    refreshToken: refreshToken,
+    logout,
     resendActivationCode,
     requestPasswordReset,
     resendPasswordReset,
     resetPassword,
     verifyResetCode,
-    logout,
     getRefreshTokens,
     clearRefreshTokens,
 }; 

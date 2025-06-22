@@ -9,6 +9,9 @@ const authRouter = require('./routers/auth-router');
 const userRouter = require('./routers/user-router');
 const guestPatientRouter = require('./routers/guest-patient-router');
 const appointmentRouter = require('./routers/appointment-router');
+const especialidadRouter = require('./routers/especialidad-router');
+const serviceTypeRouter = require('./routers/service-type-router');
+const disponibilidadRouter = require('./routers/disponibilidad-router');
 const app = express();
 
 // Configuración de CORS
@@ -23,5 +26,8 @@ app.use('/api', authRouter); // Prefijo '/api' para tus rutas de autenticación
 app.use('/api/user', userRouter); // Prefijo '/api/user' para tus rutas de usuario
 app.use('/api/guest-patients', guestPatientRouter); // Prefijo '/api/guest-patients' para rutas de pacientes invitados
 app.use('/api/appointments', appointmentRouter); // Prefijo '/api/appointments' para rutas de citas
+app.use('/api/especialidades', especialidadRouter); // Prefijo '/api/especialidades' para rutas de especialidades
+app.use('/api/service-types', serviceTypeRouter); // Prefijo '/api/service-types' para rutas de tipos de servicio
+app.use('/api/disponibilidades', disponibilidadRouter); // Prefijo '/api/disponibilidades' para rutas de disponibilidades
 
 module.exports = app;

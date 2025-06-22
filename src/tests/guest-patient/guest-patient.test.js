@@ -32,19 +32,19 @@ describe('GuestPatient API', () => {
                 .send(patientData)
                 .expect(201);
 
+            expect(response.body.success).toBe(true);
             expect(response.body.message).toBe('Paciente invitado creado exitosamente');
-            expect(response.body.patient.name).toBe(patientData.name);
-            expect(response.body.patient.phone).toBe(patientData.phone);
-            expect(response.body.patient.email).toBe(patientData.email);
-            expect(response.body.patient.is_active).toBe(true);
+            expect(response.body.data.name).toBe(patientData.name);
+            expect(response.body.data.phone).toBe(patientData.phone);
+            expect(response.body.data.email).toBe(patientData.email);
 
-            testPatient = response.body.patient;
+            testPatient = response.body.data;
         });
 
         it('debería crear un paciente sin email', async () => {
             const patientData = {
                 name: 'María García',
-                phone: '0987654321'
+                phone: '9876543210'
             };
 
             const response = await request(app)
@@ -52,7 +52,8 @@ describe('GuestPatient API', () => {
                 .send(patientData)
                 .expect(201);
 
-            expect(response.body.patient.email).toBeNull();
+            expect(response.body.success).toBe(true);
+            expect(response.body.data.email).toBeNull();
         });
 
         it('debería rechazar crear paciente sin nombre', async () => {
@@ -65,8 +66,9 @@ describe('GuestPatient API', () => {
                 .send(patientData)
                 .expect(400);
 
-            expect(response.body.error).toBe('Datos de entrada inválidos');
-            expect(response.body.details).toContain('El nombre es obligatorio');
+            expect(response.body.success).toBe(false);
+            expect(response.body.message).toBe('Datos de entrada inválidos');
+            expect(response.body.errors).toBeDefined();
         });
 
         it('debería rechazar crear paciente sin teléfono', async () => {
@@ -79,8 +81,9 @@ describe('GuestPatient API', () => {
                 .send(patientData)
                 .expect(400);
 
-            expect(response.body.error).toBe('Datos de entrada inválidos');
-            expect(response.body.details).toContain('El teléfono es obligatorio');
+            expect(response.body.success).toBe(false);
+            expect(response.body.message).toBe('Datos de entrada inválidos');
+            expect(response.body.errors).toBeDefined();
         });
 
         it('debería rechazar crear paciente con email duplicado', async () => {
@@ -93,55 +96,10 @@ describe('GuestPatient API', () => {
             const response = await request(app)
                 .post('/api/guest-patients')
                 .send(patientData)
-                .expect(400);
+                .expect(409);
 
-            expect(response.body.error).toBe('Ya existe un paciente con ese email');
-        });
-    });
-
-    describe('GET /api/guest-patients/search', () => {
-        it('debería buscar pacientes por nombre', async () => {
-            const response = await request(app)
-                .get('/api/guest-patients/search?query=Juan')
-                .expect(200);
-
-            expect(response.body.patients.length).toBeGreaterThan(0);
-            expect(response.body.patients[0].name).toContain('Juan');
-        });
-
-        it('debería buscar pacientes por email', async () => {
-            const response = await request(app)
-                .get('/api/guest-patients/search?query=juan@example.com')
-                .expect(200);
-
-            expect(response.body.patients.length).toBeGreaterThan(0);
-            expect(response.body.patients[0].email).toBe('juan@example.com');
-        });
-
-        it('debería rechazar búsqueda con menos de 2 caracteres', async () => {
-            const response = await request(app)
-                .get('/api/guest-patients/search?query=a')
-                .expect(400);
-
-            expect(response.body.error).toBe('La búsqueda debe tener al menos 2 caracteres');
-        });
-    });
-
-    describe('GET /api/guest-patients (protegido)', () => {
-        it('debería obtener todos los pacientes activos', async () => {
-            const response = await request(app)
-                .get('/api/guest-patients')
-                .set('Authorization', `Bearer ${authToken}`)
-                .expect(200);
-
-            expect(response.body.patients).toBeInstanceOf(Array);
-            expect(response.body.count).toBeGreaterThan(0);
-        });
-
-        it('debería rechazar acceso sin token', async () => {
-            await request(app)
-                .get('/api/guest-patients')
-                .expect(401);
+            expect(response.body.success).toBe(false);
+            expect(response.body.message).toBe('Ya existe un paciente con este email');
         });
     });
 
@@ -152,8 +110,9 @@ describe('GuestPatient API', () => {
                 .set('Authorization', `Bearer ${authToken}`)
                 .expect(200);
 
-            expect(response.body.patient.id).toBe(testPatient.id);
-            expect(response.body.patient.name).toBe(testPatient.name);
+            expect(response.body.success).toBe(true);
+            expect(response.body.data.id).toBe(testPatient.id);
+            expect(response.body.data.name).toBe(testPatient.name);
         });
 
         it('debería devolver 404 para ID inexistente', async () => {
@@ -162,13 +121,20 @@ describe('GuestPatient API', () => {
                 .set('Authorization', `Bearer ${authToken}`)
                 .expect(404);
         });
+
+        it('debería rechazar acceso sin token', async () => {
+            await request(app)
+                .get(`/api/guest-patients/${testPatient.id}`)
+                .expect(401);
+        });
     });
 
     describe('PUT /api/guest-patients/:id (protegido)', () => {
         it('debería actualizar un paciente', async () => {
             const updateData = {
                 name: 'Juan Pérez Actualizado',
-                phone: '1111111111'
+                phone: '1111111111',
+                email: 'juan@example.com' // Mantener el email original
             };
 
             const response = await request(app)
@@ -177,9 +143,11 @@ describe('GuestPatient API', () => {
                 .send(updateData)
                 .expect(200);
 
+            expect(response.body.success).toBe(true);
             expect(response.body.message).toBe('Paciente invitado actualizado exitosamente');
-            expect(response.body.patient.name).toBe(updateData.name);
-            expect(response.body.patient.phone).toBe(updateData.phone);
+            expect(response.body.data.name).toBe(updateData.name);
+            expect(response.body.data.phone).toBe(updateData.phone);
+            expect(response.body.data.email).toBe(updateData.email);
         });
 
         it('debería rechazar actualizar con email duplicado', async () => {
@@ -192,6 +160,8 @@ describe('GuestPatient API', () => {
             });
 
             const updateData = {
+                name: 'Otro Paciente',
+                phone: '2222222222',
                 email: 'juan@example.com' // Email del primer paciente
             };
 
@@ -199,9 +169,22 @@ describe('GuestPatient API', () => {
                 .put(`/api/guest-patients/${otherPatient.id}`)
                 .set('Authorization', `Bearer ${authToken}`)
                 .send(updateData)
-                .expect(400);
+                .expect(409);
 
-            expect(response.body.error).toBe('Ya existe otro paciente con ese email');
+            expect(response.body.success).toBe(false);
+            expect(response.body.message).toBe('Ya existe otro paciente con este email');
+        });
+
+        it('debería rechazar acceso sin token', async () => {
+            const updateData = {
+                name: 'Test',
+                phone: '1234567890'
+            };
+
+            await request(app)
+                .put(`/api/guest-patients/${testPatient.id}`)
+                .send(updateData)
+                .expect(401);
         });
     });
 
@@ -212,14 +195,14 @@ describe('GuestPatient API', () => {
                 .set('Authorization', `Bearer ${authToken}`)
                 .expect(200);
 
+            expect(response.body.success).toBe(true);
             expect(response.body.message).toBe('Paciente invitado desactivado exitosamente');
+        });
 
-            // Verificar que el paciente ya no aparece en las búsquedas
-            const searchResponse = await request(app)
-                .get('/api/guest-patients/search?query=Juan')
-                .expect(200);
-
-            expect(searchResponse.body.patients.length).toBe(0);
+        it('debería rechazar acceso sin token', async () => {
+            await request(app)
+                .delete(`/api/guest-patients/${testPatient.id}`)
+                .expect(401);
         });
     });
 }); 

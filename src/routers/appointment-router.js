@@ -15,6 +15,12 @@ router.post('/user', appointmentController.createUserAppointment);
 // Obtener citas del usuario autenticado
 router.get('/user', appointmentController.getUserAppointments);
 
+// Obtener estadísticas de citas
+router.get('/stats', appointmentController.getAppointmentStats);
+
+// Obtener todas las citas (para administradores)
+router.get('/', appointmentController.getAllAppointments);
+
 // Obtener una cita específica
 router.get('/:id', appointmentController.getById);
 

@@ -6,10 +6,10 @@ const router = express.Router();
 const authController = require('../controllers/auth-controller');
 
 // ======================= RUTAS =======================
-router.post("/registro", authController.register);
+router.post("/registro", authController.registro);
 router.post("/login", authController.login);
 router.post("/token", authController.refreshToken);
-router.post("/activar", authController.activateAccount);
+router.post("/activar", authController.activar);
 router.post("/reenviar-activacion", authController.resendActivationCode);
 router.post("/solicitar-reset", authController.requestPasswordReset);
 router.post("/reenviar-reset", authController.resendPasswordReset);

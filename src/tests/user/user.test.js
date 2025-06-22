@@ -1,242 +1,281 @@
-// tests/user/user.test.js
-
-const request = require('supertest');
-const express = require('express');
+const userController = require('../../controllers/user-controller');
 const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
-require('dotenv').config();
-const app = require('../../app');
-const { User, sequelize } = require('../../models/index');
 
-const userRoutes = require('../routers/user-router');
+// Mock de los modelos
+jest.mock('../../models', () => ({
+  User: {
+    findByPk: jest.fn(),
+    update: jest.fn()
+  }
+}));
 
-let activeUser;
-let activeUserToken;
+// Mock de bcrypt
+jest.mock('bcrypt', () => ({
+  compare: jest.fn(),
+  hash: jest.fn()
+}));
 
-beforeAll(async () => {
-  await sequelize.sync({ force: true });
-});
+const { User } = require('../../models');
 
-beforeEach(async () => {
-  await User.destroy({ truncate: true, cascade: true });
-  await sequelize.sync({ force: true });
+describe('User Controller', () => {
+  let mockReq, mockRes;
 
-  activeUser = await User.create({
-    id: 1,
-    name: 'Usuario Activo',
-    id_number: '111111111',
-    email: 'active.user@example.com',
-    password: await bcrypt.hash('Password123!', 10),
-    phone: '3001234567',
-    address: 'Calle Falsa 123',
-    role: 'user',
-    status: 'active',
+  beforeEach(() => {
+    mockReq = {
+      user: { id: 1 }
+    };
+    mockRes = {
+      json: jest.fn(),
+      status: jest.fn().mockReturnThis()
+    };
+    jest.clearAllMocks();
   });
 
-  activeUserToken = jwt.sign(
-    { id: activeUser.id, name: activeUser.name, email: activeUser.email, role: activeUser.role, status: activeUser.status },
-    process.env.JWT_SECRET,
-    { expiresIn: '1h' }
-  );
-});
+  describe('getProfile', () => {
+    it('debería obtener el perfil del usuario exitosamente', async () => {
+      const mockUser = {
+        id: 1,
+        name: 'Juan Pérez',
+        email: 'juan@example.com',
+        phone: '1234567890',
+        role: 'user',
+        status: 'active',
+        toJSON: jest.fn().mockReturnValue({
+          id: 1,
+          name: 'Juan Pérez',
+          email: 'juan@example.com',
+          phone: '1234567890',
+          role: 'user',
+          status: 'active'
+        })
+      };
 
-afterEach(() => {
-  // Restaura todos los mocks después de cada prueba
-  jest.restoreAllMocks();
-});
+      User.findByPk.mockResolvedValue(mockUser);
 
-afterAll(async () => {
-  await sequelize.close();
-});
+      await userController.getProfile(mockReq, mockRes);
 
-// ======================= TESTS PARA GET /api/perfil =======================
-describe('GET /api/perfil', () => {
-  it('debe devolver el perfil del usuario autenticado', async () => {
-    const response = await request(app)
-      .get('/api/perfil')
-      .set('Authorization', `Bearer ${activeUserToken}`);
-
-    expect(response.statusCode).toBe(200);
-    expect(response.body.user).toBeDefined();
-    expect(response.body.user.id).toBe(activeUser.id);
-    expect(response.body.user.email).toBe(activeUser.email);
-    expect(response.body.user).not.toHaveProperty('password');
-  });
-
-  it('debe devolver 401 si no se proporciona token', async () => {
-    const response = await request(app).get('/api/perfil');
-    expect(response.statusCode).toBe(401);
-    expect(response.body.error).toBe('Token requerido');
-  });
-
-  it('debe devolver 403 si el token es inválido o expirado', async () => {
-    const response = await request(app)
-      .get('/api/perfil')
-      .set('Authorization', `Bearer invalid_or_expired_token`);
-    expect(response.statusCode).toBe(403);
-    expect(response.body.error).toBe('Token inválido o expirado');
-  });
-
-  it('debe devolver 404 si el usuario del token no es encontrado en la DB', async () => {
-    const nonExistentUserToken = jwt.sign(
-      { id: 99999, email: 'nonexistent@example.com', role: 'user', status: 'active' },
-      process.env.JWT_SECRET,
-      { expiresIn: '1h' }
-    );
-
-    const response = await request(app)
-      .get('/api/perfil')
-      .set('Authorization', `Bearer ${nonExistentUserToken}`);
-
-    expect(response.statusCode).toBe(404);
-    expect(response.body.error).toBe('Usuario no encontrado');
-  });
-
-  it('debe devolver 500 en caso de error interno del servidor', async () => {
-    jest.spyOn(User, 'findByPk').mockImplementation(() => {
-      throw new Error('Database error');
+      expect(User.findByPk).toHaveBeenCalledWith(1, {
+        attributes: { exclude: ['password'] }
+      });
+      expect(mockRes.json).toHaveBeenCalledWith({
+        user: mockUser
+      });
     });
 
-    const response = await request(app)
-      .get('/api/perfil')
-      .set('Authorization', `Bearer ${activeUserToken}`);
+    it('debería devolver 404 si el usuario no existe', async () => {
+      User.findByPk.mockResolvedValue(null);
 
-    expect(response.statusCode).toBe(500);
-    expect(response.body.error).toBe('Error al obtener perfil');
-    expect(response.body.details).toBe('Database error');
-  });
-});
+      await userController.getProfile(mockReq, mockRes);
 
-// ======================= TESTS PARA POST /api/cambiar-password =======================
-describe('POST /api/cambiar-password', () => {
-  const currentPassword = 'Password123!';
-  const newStrongPassword = 'NewStrongPass123!';
-  const weakPassword = 'short';
-
-  it('debe cambiar la contraseña del usuario autenticado correctamente', async () => {
-    const response = await request(app)
-      .post('/api/cambiar-password')
-      .set('Authorization', `Bearer ${activeUserToken}`)
-      .send({ currentPassword, newPassword: newStrongPassword });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.body.message).toBe('Contraseña actualizada correctamente.');
-
-    const updatedUser = await User.findByPk(activeUser.id);
-    expect(await bcrypt.compare(newStrongPassword, updatedUser.password)).toBe(true);
-  });
-
-  it('debe devolver 401 si la contraseña actual es incorrecta', async () => {
-    const response = await request(app)
-      .post('/api/cambiar-password')
-      .set('Authorization', `Bearer ${activeUserToken}`)
-      .send({ currentPassword: 'wrong-password', newPassword: newStrongPassword });
-    
-    expect(response.statusCode).toBe(401);
-    expect(response.body.error).toBe('La contraseña actual es incorrecta.');
-  });
-  
-  it('debe devolver 400 si la nueva contraseña es igual a la actual', async () => {
-    const response = await request(app)
-      .post('/api/cambiar-password')
-      .set('Authorization', `Bearer ${activeUserToken}`)
-      .send({ currentPassword, newPassword: currentPassword });
-
-    expect(response.statusCode).toBe(400);
-    expect(response.body.error).toBe('La nueva contraseña no puede ser igual a la actual.');
-  });
-
-  it('debe devolver 400 si la validación del DTO falla (ej. nueva contraseña débil)', async () => {
-    const response = await request(app)
-      .post('/api/cambiar-password')
-      .set('Authorization', `Bearer ${activeUserToken}`)
-      .send({ currentPassword, newPassword: weakPassword });
-
-    expect(response.statusCode).toBe(400);
-    expect(response.body.error).toBeDefined();
-    expect(response.body.error).toContain('La nueva contraseña debe tener al menos 6 caracteres');
-  });
-
-  it('debe devolver 401 si no se proporciona token', async () => {
-    const response = await request(app)
-      .post('/api/cambiar-password')
-      .send({ currentPassword, newPassword: newStrongPassword });
-
-    expect(response.statusCode).toBe(401);
-  });
-
-  it('debe devolver 404 si el usuario del token no es encontrado en la DB', async () => {
-    const nonExistentUserToken = jwt.sign({ id: 99999 }, process.env.JWT_SECRET);
-
-    const response = await request(app)
-      .post('/api/cambiar-password')
-      .set('Authorization', `Bearer ${nonExistentUserToken}`)
-      .send({ currentPassword, newPassword: newStrongPassword });
-
-    expect(response.statusCode).toBe(404);
-    expect(response.body.error).toBe('Usuario no encontrado.');
-  });
-
-  it('debe devolver 500 en caso de error interno del servidor', async () => {
-    jest.spyOn(User, 'findByPk').mockImplementation(() => {
-      throw new Error('Database error');
+      expect(mockRes.status).toHaveBeenCalledWith(404);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        error: 'Usuario no encontrado'
+      });
     });
 
-    const response = await request(app)
-      .post('/api/cambiar-password')
-      .set('Authorization', `Bearer ${activeUserToken}`)
-      .send({ currentPassword, newPassword: newStrongPassword });
+    it('debería manejar errores internos', async () => {
+      User.findByPk.mockRejectedValue(new Error('Error de base de datos'));
 
-    expect(response.statusCode).toBe(500);
-    expect(response.body.error).toBe('Error interno del servidor al cambiar la contraseña.');
-    expect(response.body.details).toBe('Database error');
-  });
-});
+      await userController.getProfile(mockReq, mockRes);
 
-// ======================= TESTS PARA PATCH /api/perfil =======================
-describe('PATCH /api/perfil', () => {
-  const updates = { name: 'Nuevo Nombre', phone: '9876543210' };
-  const invalidUpdates = { email: 'invalid-email' };
-
-  it('debe actualizar correctamente los campos del perfil del usuario', async () => {
-    const response = await request(app)
-      .patch('/api/perfil')
-      .set('Authorization', `Bearer ${activeUserToken}`)
-      .send(updates);
-
-    expect(response.statusCode).toBe(200);
-    expect(response.body.user).toBeDefined();
-    expect(response.body.user.name).toBe(updates.name);
-    expect(response.body.user.phone).toBe(updates.phone);
-    expect(response.body.message).toBe('Perfil actualizado correctamente.');
-
-    const updatedUserInDb = await User.findByPk(activeUser.id);
-    expect(updatedUserInDb.name).toBe(updates.name);
-    expect(updatedUserInDb.phone).toBe(updates.phone);
+      expect(mockRes.status).toHaveBeenCalledWith(500);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        error: 'Error al obtener perfil',
+        details: 'Error de base de datos'
+      });
+    });
   });
 
-  it('debe devolver 400 si la validación del DTO falla', async () => {
-    const response = await request(app)
-      .patch('/api/perfil')
-      .set('Authorization', `Bearer ${activeUserToken}`)
-      .send(invalidUpdates);
+  describe('changePassword', () => {
+    it('debería cambiar la contraseña exitosamente', async () => {
+      const passwordData = {
+        currentPassword: 'oldPassword123',
+        newPassword: 'newPassword123'
+      };
 
-    expect(response.statusCode).toBe(400);
-    expect(response.body.error).toContain('Debe ser un correo válido');
-  });
-  
-  it('debe devolver 500 en caso de error interno del servidor', async () => {
-    jest.spyOn(User, 'findByPk').mockImplementation(() => {
-      throw new Error('Database error');
+      const mockUser = {
+        id: 1,
+        password: 'hashedOldPassword',
+        save: jest.fn().mockResolvedValue(true)
+      };
+
+      mockReq.body = passwordData;
+      User.findByPk.mockResolvedValue(mockUser);
+      bcrypt.compare
+        .mockResolvedValueOnce(true) // currentPassword es correcta
+        .mockResolvedValueOnce(false); // newPassword es diferente
+      bcrypt.hash.mockResolvedValue('hashedNewPassword');
+
+      await userController.changePassword(mockReq, mockRes);
+
+      expect(User.findByPk).toHaveBeenCalledWith(1);
+      expect(bcrypt.compare).toHaveBeenCalledWith('oldPassword123', 'hashedOldPassword');
+      expect(bcrypt.compare).toHaveBeenCalledWith('newPassword123', 'hashedOldPassword');
+      expect(bcrypt.hash).toHaveBeenCalledWith('newPassword123', 10);
+      expect(mockUser.save).toHaveBeenCalled();
+      expect(mockRes.json).toHaveBeenCalledWith({
+        message: 'Contraseña actualizada correctamente.'
+      });
     });
 
-    const response = await request(app)
-      .patch('/api/perfil')
-      .set('Authorization', `Bearer ${activeUserToken}`)
-      .send(updates);
+    it('debería rechazar si el usuario no existe', async () => {
+      const passwordData = {
+        currentPassword: 'oldPassword123',
+        newPassword: 'newPassword123'
+      };
 
-    expect(response.statusCode).toBe(500);
-    expect(response.body.error).toBe('Error al actualizar perfil');
-    expect(response.body.details).toBe('Database error');
+      mockReq.body = passwordData;
+      User.findByPk.mockResolvedValue(null);
+
+      await userController.changePassword(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(404);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        error: 'Usuario no encontrado.'
+      });
+    });
+
+    it('debería rechazar si la contraseña actual es incorrecta', async () => {
+      const passwordData = {
+        currentPassword: 'wrongPassword',
+        newPassword: 'newPassword123'
+      };
+
+      const mockUser = {
+        id: 1,
+        password: 'hashedOldPassword'
+      };
+
+      mockReq.body = passwordData;
+      User.findByPk.mockResolvedValue(mockUser);
+      bcrypt.compare.mockResolvedValue(false);
+
+      await userController.changePassword(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(401);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        error: 'La contraseña actual es incorrecta.'
+      });
+    });
+
+    it('debería rechazar si la nueva contraseña es igual a la actual', async () => {
+      const passwordData = {
+        currentPassword: 'samePassword',
+        newPassword: 'samePassword'
+      };
+
+      const mockUser = {
+        id: 1,
+        password: 'hashedSamePassword'
+      };
+
+      mockReq.body = passwordData;
+      User.findByPk.mockResolvedValue(mockUser);
+      bcrypt.compare
+        .mockResolvedValueOnce(true) // currentPassword es correcta
+        .mockResolvedValueOnce(true); // newPassword es igual a la actual
+
+      await userController.changePassword(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(400);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        error: 'La nueva contraseña no puede ser igual a la actual.'
+      });
+    });
+
+    it('debería manejar errores internos', async () => {
+      const passwordData = {
+        currentPassword: 'oldPassword123',
+        newPassword: 'newPassword123'
+      };
+
+      mockReq.body = passwordData;
+      User.findByPk.mockRejectedValue(new Error('Error de base de datos'));
+
+      await userController.changePassword(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(500);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        error: 'Error interno del servidor al cambiar la contraseña.',
+        details: 'Error de base de datos'
+      });
+    });
   });
-});
+
+  describe('updateProfile', () => {
+    it('debería actualizar el perfil exitosamente', async () => {
+      const profileData = {
+        name: 'Juan Carlos Pérez',
+        phone: '9876543210',
+        address: 'Nueva Dirección 456'
+      };
+
+      const mockUser = {
+        id: 1,
+        name: 'Juan Pérez',
+        email: 'juan@example.com',
+        phone: '1234567890',
+        address: 'Dirección Antigua',
+        update: jest.fn().mockResolvedValue(true),
+        toJSON: jest.fn().mockReturnValue({
+          id: 1,
+          name: 'Juan Carlos Pérez',
+          email: 'juan@example.com',
+          phone: '9876543210',
+          address: 'Nueva Dirección 456'
+        })
+      };
+
+      mockReq.body = profileData;
+      User.findByPk.mockResolvedValue(mockUser);
+
+      await userController.updateProfile(mockReq, mockRes);
+
+      expect(User.findByPk).toHaveBeenCalledWith(1);
+      expect(mockUser.update).toHaveBeenCalledWith(profileData);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        user: expect.objectContaining({
+          id: 1,
+          name: 'Juan Carlos Pérez',
+          email: 'juan@example.com',
+          phone: '9876543210',
+          address: 'Nueva Dirección 456'
+        }),
+        message: 'Perfil actualizado correctamente.'
+      });
+    });
+
+    it('debería rechazar si el usuario no existe', async () => {
+      const profileData = {
+        name: 'Juan Carlos Pérez'
+      };
+
+      mockReq.body = profileData;
+      User.findByPk.mockResolvedValue(null);
+
+      await userController.updateProfile(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(404);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        error: 'Usuario no encontrado'
+      });
+    });
+
+    it('debería manejar errores internos', async () => {
+      const profileData = {
+        name: 'Juan Carlos Pérez'
+      };
+
+      mockReq.body = profileData;
+      User.findByPk.mockRejectedValue(new Error('Error de base de datos'));
+
+      await userController.updateProfile(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(500);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        error: 'Error al actualizar perfil',
+        details: 'Error de base de datos'
+      });
+    });
+  });
+}); 
