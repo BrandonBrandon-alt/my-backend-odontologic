@@ -8,57 +8,84 @@ module.exports = (sequelize) => {
       autoIncrement: true,
       allowNull: false
     },
-    date: { // Fecha de la cita (YYYY-MM-DD)
-      type: DataTypes.DATEONLY,
-      allowNull: false
-    },
-    time: { // Hora de la cita (HH:MM)
-      type: DataTypes.STRING,
-      allowNull: false,
-      validate: {
-        is: /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/ // Validación formato HH:MM
+    user_id: { // FK a User (para pacientes registrados)
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'users',
+        key: 'id'
       }
     },
-    status: { // Estado de la cita: "scheduled", "completed", "cancelled", "missed"
-      type: DataTypes.ENUM("scheduled", "completed", "cancelled", "missed"),
-      allowNull: false,
-      defaultValue: "scheduled"
+    guest_patient_id: { // FK a GuestPatient (para pacientes invitados)
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'guest_patients',
+        key: 'id'
+      }
     },
-    notes: { // Notas internas sobre la cita
-      type: DataTypes.TEXT,
+    disponibilidad_id: { // FK a Disponibilidad
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: 'disponibilidades',
+        key: 'id'
+      }
+    },
+    service_type_id: { // FK a ServiceType
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: 'service_types',
+        key: 'id'
+      }
+    },
+    preferred_date: { // Fecha preferida de la cita (YYYY-MM-DD)
+      type: DataTypes.DATEONLY,
       allowNull: true
     },
-    created_by: { // Quién creó la cita
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      references: {
-        model: 'users',
-        key: 'id'
-      }
+    preferred_time: { // Hora preferida de la cita (HH:MM:SS)
+      type: DataTypes.TIME,
+      allowNull: true
     },
-    updated_by: { // Quién actualizó la cita por última vez
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      references: {
-        model: 'users',
-        key: 'id'
-      }
+    status: { // Estado de la cita: "pending", "confirmed", "cancelled", "completed"
+      type: DataTypes.ENUM("pending", "confirmed", "cancelled", "completed"),
+      allowNull: false,
+      defaultValue: "pending"
     },
-    // patientId (FK de User) y guestPatientId (FK de GuestPatient) se agregarán en las asociaciones
-    // serviceTypeId (FK de ServiceType) y dentistId (FK de User) también se agregarán
+    appointment_type: { // Tipo de cita: "guest" o "registered"
+      type: DataTypes.ENUM("guest", "registered"),
+      allowNull: false
+    },
+    notes: { // Notas sobre la cita
+      type: DataTypes.TEXT,
+      allowNull: true
+    }
   }, {
     tableName: 'appointments',
     freezeTableName: true,
     timestamps: true,
     indexes: [
       {
-        fields: ['date']
+        fields: ['user_id']
       },
       {
-        fields: ['dentistId', 'date']
+        fields: ['guest_patient_id']
+      },
+      {
+        fields: ['disponibilidad_id']
+      },
+      {
+        fields: ['service_type_id']
+      },
+      {
+        fields: ['preferred_date']
       },
       {
         fields: ['status']
+      },
+      {
+        fields: ['appointment_type']
       }
     ]
   });

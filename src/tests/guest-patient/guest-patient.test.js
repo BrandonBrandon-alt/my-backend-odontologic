@@ -65,7 +65,8 @@ describe('GuestPatient API', () => {
                 .send(patientData)
                 .expect(400);
 
-            expect(response.body.error).toBe('Nombre y teléfono son obligatorios');
+            expect(response.body.error).toBe('Datos de entrada inválidos');
+            expect(response.body.details).toContain('El nombre es obligatorio');
         });
 
         it('debería rechazar crear paciente sin teléfono', async () => {
@@ -78,7 +79,8 @@ describe('GuestPatient API', () => {
                 .send(patientData)
                 .expect(400);
 
-            expect(response.body.error).toBe('Nombre y teléfono son obligatorios');
+            expect(response.body.error).toBe('Datos de entrada inválidos');
+            expect(response.body.details).toContain('El teléfono es obligatorio');
         });
 
         it('debería rechazar crear paciente con email duplicado', async () => {

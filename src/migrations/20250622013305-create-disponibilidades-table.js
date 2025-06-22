@@ -3,14 +3,14 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   up: async (queryInterface, Sequelize) => {
-    await queryInterface.createTable('DentistSpecialties', {
+    await queryInterface.createTable('disponibilidades', {
       id: {
         allowNull: false,
         autoIncrement: true,
         primaryKey: true,
         type: Sequelize.INTEGER
       },
-      dentistId: {
+      dentist_id: {
         type: Sequelize.INTEGER,
         allowNull: false,
         references: {
@@ -20,7 +20,7 @@ module.exports = {
         onUpdate: 'CASCADE',
         onDelete: 'CASCADE'
       },
-      especialidadId: {
+      especialidad_id: {
         type: Sequelize.INTEGER,
         allowNull: false,
         references: {
@@ -29,6 +29,23 @@ module.exports = {
         },
         onUpdate: 'CASCADE',
         onDelete: 'CASCADE'
+      },
+      date: {
+        type: Sequelize.DATEONLY,
+        allowNull: false
+      },
+      start_time: {
+        type: Sequelize.TIME,
+        allowNull: false
+      },
+      end_time: {
+        type: Sequelize.TIME,
+        allowNull: false
+      },
+      is_active: {
+        type: Sequelize.BOOLEAN,
+        allowNull: false,
+        defaultValue: true
       },
       createdAt: {
         allowNull: false,
@@ -40,13 +57,13 @@ module.exports = {
       }
     });
 
-    // Crear índices únicos para evitar duplicados
-    await queryInterface.addIndex('DentistSpecialties', ['dentistId', 'especialidadId'], {
-      unique: true
-    });
+    // Crear índices
+    await queryInterface.addIndex('disponibilidades', ['dentist_id', 'date']);
+    await queryInterface.addIndex('disponibilidades', ['especialidad_id']);
+    await queryInterface.addIndex('disponibilidades', ['is_active']);
   },
 
   down: async (queryInterface, Sequelize) => {
-    await queryInterface.dropTable('DentistSpecialties');
+    await queryInterface.dropTable('disponibilidades');
   }
 };

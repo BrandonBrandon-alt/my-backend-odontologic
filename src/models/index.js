@@ -26,80 +26,85 @@ const Appointment = require('./appointment-model')(sequelize);
 
 // 1. User (Paciente registrado) y Appointment
 User.hasMany(Appointment, {
-  foreignKey: 'patientId', // FK en Appointment que apunta a User
-  as: 'patientAppointments' // Alias para cuando se incluya desde User
+  foreignKey: 'user_id', // FK en Appointment que apunta a User
+  as: 'userAppointments' // Alias para cuando se incluya desde User
 });
 Appointment.belongsTo(User, {
-  foreignKey: 'patientId',
-  as: 'patient' // Alias para cuando se incluya desde Appointment
+  foreignKey: 'user_id',
+  as: 'user' // Alias para cuando se incluya desde Appointment
 });
 
 // 2. GuestPatient (Paciente invitado) y Appointment
 GuestPatient.hasMany(Appointment, {
-  foreignKey: 'guestPatientId', // FK en Appointment que apunta a GuestPatient
+  foreignKey: 'guest_patient_id', // FK en Appointment que apunta a GuestPatient
   as: 'guestAppointments'
 });
 Appointment.belongsTo(GuestPatient, {
-  foreignKey: 'guestPatientId',
+  foreignKey: 'guest_patient_id',
   as: 'guestPatient'
 });
 
-// Lógica de aplicación para asegurar que solo uno sea no-nulo:
-// Esto se manejará en tu código backend al crear o actualizar citas,
-// no es una restricción a nivel de base de datos directamente con Sequelize.
-
-// 3. User (Odontólogo) y Appointment
-User.hasMany(Appointment, {
-  foreignKey: 'dentistId', // FK en Appointment que apunta al User dentista
-  as: 'dentistAppointments'
+// 3. Appointment y Disponibilidad
+Disponibilidad.hasMany(Appointment, {
+  foreignKey: 'disponibilidad_id', // FK en Appointment que apunta a Disponibilidad
+  as: 'appointments'
 });
-Appointment.belongsTo(User, {
-  foreignKey: 'dentistId',
-  as: 'dentist'
+Appointment.belongsTo(Disponibilidad, {
+  foreignKey: 'disponibilidad_id',
+  as: 'disponibilidad'
 });
 
-// 4. User (Odontólogo) y Disponibilidad
+// 4. Appointment y ServiceType
+ServiceType.hasMany(Appointment, {
+  foreignKey: 'service_type_id', // FK en Appointment que apunta a ServiceType
+  as: 'appointments'
+});
+Appointment.belongsTo(ServiceType, {
+  foreignKey: 'service_type_id',
+  as: 'serviceType'
+});
+
+// 5. User (Odontólogo) y Disponibilidad
 User.hasMany(Disponibilidad, {
-  foreignKey: 'dentistId', // FK en Disponibilidad que apunta al User dentista
+  foreignKey: 'dentist_id', // FK en Disponibilidad que apunta al User dentista
   as: 'dentistAvailabilities'
 });
 Disponibilidad.belongsTo(User, {
-  foreignKey: 'dentistId',
+  foreignKey: 'dentist_id',
   as: 'dentist'
 });
 
-// 5. User (Odontólogo) y Especialidad (relación Many-to-Many)
+// 6. Disponibilidad y Especialidad
+Especialidad.hasMany(Disponibilidad, {
+  foreignKey: 'especialidad_id', // FK en Disponibilidad que apunta a Especialidad
+  as: 'disponibilidades'
+});
+Disponibilidad.belongsTo(Especialidad, {
+  foreignKey: 'especialidad_id',
+  as: 'especialidad'
+});
+
+// 7. User (Odontólogo) y Especialidad (relación Many-to-Many)
 User.belongsToMany(Especialidad, {
   through: 'DentistSpecialties', // Tabla intermedia automática
-  foreignKey: 'dentistId', // FK en DentistSpecialties que apunta a User
-  otherKey: 'especialidadId', // FK en DentistSpecialties que apunta a Especialidad
+  foreignKey: 'dentist_id', // FK en DentistSpecialties que apunta a User
+  otherKey: 'especialidad_id', // FK en DentistSpecialties que apunta a Especialidad
   as: 'specialties'
 });
 Especialidad.belongsToMany(User, {
   through: 'DentistSpecialties',
-  foreignKey: 'especialidadId',
-  otherKey: 'dentistId',
+  foreignKey: 'especialidad_id',
+  otherKey: 'dentist_id',
   as: 'dentists'
 });
 
-// 6. Appointment y ServiceType
-ServiceType.hasMany(Appointment, {
-  foreignKey: 'serviceTypeId', // FK en Appointment que apunta a ServiceType
-  as: 'appointments'
-});
-Appointment.belongsTo(ServiceType, {
-  foreignKey: 'serviceTypeId',
-  as: 'serviceType'
-});
-
-// 7. ServiceType y Especialidad (Opcional: Si un tipo de servicio se asocia a una especialidad)
-// Esto ayuda a filtrar servicios por la especialidad del odontólogo.
+// 8. ServiceType y Especialidad
 Especialidad.hasMany(ServiceType, {
-  foreignKey: 'especialidadId',
+  foreignKey: 'especialidad_id',
   as: 'serviceTypes'
 });
 ServiceType.belongsTo(Especialidad, {
-  foreignKey: 'especialidadId',
+  foreignKey: 'especialidad_id',
   as: 'especialidad'
 });
 

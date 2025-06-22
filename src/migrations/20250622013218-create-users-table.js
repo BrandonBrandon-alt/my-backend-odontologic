@@ -1,5 +1,6 @@
-// migrations/YYYYMMDDHHMMSS-create-users-table.js (el timestamp variará)
 'use strict';
+
+/** @type {import('sequelize-cli').Migration} */
 module.exports = {
   up: async (queryInterface, Sequelize) => {
     await queryInterface.createTable('users', {
@@ -39,7 +40,6 @@ module.exports = {
         type: Sequelize.DATE,
         allowNull: true
       },
-      // Eliminado: profile_picture
       role: {
         type: Sequelize.ENUM('user', 'dentist', 'admin'),
         allowNull: false,
@@ -75,7 +75,14 @@ module.exports = {
         type: Sequelize.DATE
       }
     });
+
+    // Crear índices
+    await queryInterface.addIndex('users', ['email']);
+    await queryInterface.addIndex('users', ['id_number']);
+    await queryInterface.addIndex('users', ['role']);
+    await queryInterface.addIndex('users', ['status']);
   },
+
   down: async (queryInterface, Sequelize) => {
     await queryInterface.dropTable('users');
   }

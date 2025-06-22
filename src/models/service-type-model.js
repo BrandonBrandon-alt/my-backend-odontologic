@@ -17,7 +17,15 @@ module.exports = (sequelize) => {
       type: DataTypes.TEXT,
       allowNull: true
     },
-    duration_minutes: { // Duración estimada para este tipo de servicio en minutos
+    especialidad_id: { // FK a Especialidad
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: 'especialidades',
+        key: 'id'
+      }
+    },
+    duration: { // Duración estimada para este tipo de servicio en minutos
       type: DataTypes.INTEGER,
       allowNull: true,
       validate: {
@@ -29,18 +37,17 @@ module.exports = (sequelize) => {
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: true
-    },
-    // especialidadId (FK) se agregará en las asociaciones si es necesario
+    }
   }, {
     tableName: 'service_types',
     freezeTableName: true,
     timestamps: true,
     indexes: [
       {
-        fields: ['is_active']
+        fields: ['especialidad_id']
       },
       {
-        fields: ['especialidadId']
+        fields: ['is_active']
       }
     ]
   });

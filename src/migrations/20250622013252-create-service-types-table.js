@@ -19,7 +19,17 @@ module.exports = {
         type: Sequelize.TEXT,
         allowNull: true
       },
-      duration_minutes: {
+      especialidad_id: {
+        type: Sequelize.INTEGER,
+        allowNull: false,
+        references: {
+          model: 'especialidades',
+          key: 'id'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
+      },
+      duration: {
         type: Sequelize.INTEGER,
         allowNull: true
       },
@@ -27,16 +37,6 @@ module.exports = {
         type: Sequelize.BOOLEAN,
         allowNull: false,
         defaultValue: true
-      },
-      especialidadId: {
-        type: Sequelize.INTEGER,
-        allowNull: true,
-        references: {
-          model: 'especialidades',
-          key: 'id'
-        },
-        onUpdate: 'CASCADE',
-        onDelete: 'SET NULL'
       },
       createdAt: {
         allowNull: false,
@@ -49,8 +49,8 @@ module.exports = {
     });
 
     // Crear índices
+    await queryInterface.addIndex('service_types', ['especialidad_id']);
     await queryInterface.addIndex('service_types', ['is_active']);
-    await queryInterface.addIndex('service_types', ['especialidadId']);
   },
 
   down: async (queryInterface, Sequelize) => {

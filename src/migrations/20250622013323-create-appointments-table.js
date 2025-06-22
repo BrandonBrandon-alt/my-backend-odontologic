@@ -10,26 +10,9 @@ module.exports = {
         primaryKey: true,
         type: Sequelize.INTEGER
       },
-      date: {
-        type: Sequelize.DATEONLY,
-        allowNull: false
-      },
-      time: {
-        type: Sequelize.STRING, // Formato "HH:MM"
-        allowNull: false
-      },
-      status: {
-        type: Sequelize.ENUM('scheduled', 'completed', 'cancelled', 'missed'),
-        allowNull: false,
-        defaultValue: 'scheduled'
-      },
-      notes: {
-        type: Sequelize.TEXT,
-        allowNull: true
-      },
-      created_by: {
+      user_id: {
         type: Sequelize.INTEGER,
-        allowNull: true,
+        allowNull: true, // Puede ser null si es un paciente invitado
         references: {
           model: 'users',
           key: 'id'
@@ -37,29 +20,9 @@ module.exports = {
         onUpdate: 'CASCADE',
         onDelete: 'SET NULL'
       },
-      updated_by: {
+      guest_patient_id: {
         type: Sequelize.INTEGER,
-        allowNull: true,
-        references: {
-          model: 'users',
-          key: 'id'
-        },
-        onUpdate: 'CASCADE',
-        onDelete: 'SET NULL'
-      },
-      patientId: {
-        type: Sequelize.INTEGER,
-        allowNull: true,
-        references: {
-          model: 'users',
-          key: 'id'
-        },
-        onUpdate: 'CASCADE',
-        onDelete: 'SET NULL'
-      },
-      guestPatientId: {
-        type: Sequelize.INTEGER,
-        allowNull: true,
+        allowNull: true, // Puede ser null si es un usuario registrado
         references: {
           model: 'guest_patients',
           key: 'id'
@@ -67,17 +30,17 @@ module.exports = {
         onUpdate: 'CASCADE',
         onDelete: 'SET NULL'
       },
-      dentistId: {
+      disponibilidad_id: {
         type: Sequelize.INTEGER,
         allowNull: false,
         references: {
-          model: 'users',
+          model: 'disponibilidades',
           key: 'id'
         },
         onUpdate: 'CASCADE',
         onDelete: 'CASCADE'
       },
-      serviceTypeId: {
+      service_type_id: {
         type: Sequelize.INTEGER,
         allowNull: false,
         references: {
@@ -85,7 +48,28 @@ module.exports = {
           key: 'id'
         },
         onUpdate: 'CASCADE',
-        onDelete: 'RESTRICT'
+        onDelete: 'CASCADE'
+      },
+      preferred_date: {
+        type: Sequelize.DATEONLY,
+        allowNull: false
+      },
+      preferred_time: {
+        type: Sequelize.TIME,
+        allowNull: false
+      },
+      status: {
+        type: Sequelize.ENUM('pending', 'confirmed', 'cancelled', 'completed'),
+        allowNull: false,
+        defaultValue: 'pending'
+      },
+      appointment_type: {
+        type: Sequelize.ENUM('registered', 'guest'),
+        allowNull: false
+      },
+      notes: {
+        type: Sequelize.TEXT,
+        allowNull: true
       },
       createdAt: {
         allowNull: false,
@@ -98,11 +82,13 @@ module.exports = {
     });
 
     // Crear índices
-    await queryInterface.addIndex('appointments', ['date']);
-    await queryInterface.addIndex('appointments', ['dentistId', 'date']);
+    await queryInterface.addIndex('appointments', ['user_id']);
+    await queryInterface.addIndex('appointments', ['guest_patient_id']);
+    await queryInterface.addIndex('appointments', ['disponibilidad_id']);
+    await queryInterface.addIndex('appointments', ['service_type_id']);
+    await queryInterface.addIndex('appointments', ['preferred_date']);
     await queryInterface.addIndex('appointments', ['status']);
-    await queryInterface.addIndex('appointments', ['patientId']);
-    await queryInterface.addIndex('appointments', ['guestPatientId']);
+    await queryInterface.addIndex('appointments', ['appointment_type']);
   },
 
   down: async (queryInterface, Sequelize) => {
