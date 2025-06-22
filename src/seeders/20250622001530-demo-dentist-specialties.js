@@ -29,56 +29,56 @@ module.exports = {
     await queryInterface.bulkInsert('DentistSpecialties', [
       // Dr. María González - Odontología General y Estética Dental
       {
-        dentistId: dentistaMap['Dr. María González'],
-        especialidadId: especialidadMap['Odontología General'],
+        dentist_id: dentistaMap['Dr. María González'],
+        especialidad_id: especialidadMap['Odontología General'],
         createdAt: new Date(),
         updatedAt: new Date()
       },
       {
-        dentistId: dentistaMap['Dr. María González'],
-        especialidadId: especialidadMap['Estética Dental'],
+        dentist_id: dentistaMap['Dr. María González'],
+        especialidad_id: especialidadMap['Estética Dental'],
         createdAt: new Date(),
         updatedAt: new Date()
       },
       
       // Dr. Carlos Rodríguez - Ortodoncia y Odontopediatría
       {
-        dentistId: dentistaMap['Dr. Carlos Rodríguez'],
-        especialidadId: especialidadMap['Ortodoncia'],
+        dentist_id: dentistaMap['Dr. Carlos Rodríguez'],
+        especialidad_id: especialidadMap['Ortodoncia'],
         createdAt: new Date(),
         updatedAt: new Date()
       },
       {
-        dentistId: dentistaMap['Dr. Carlos Rodríguez'],
-        especialidadId: especialidadMap['Odontopediatría'],
+        dentist_id: dentistaMap['Dr. Carlos Rodríguez'],
+        especialidad_id: especialidadMap['Odontopediatría'],
         createdAt: new Date(),
         updatedAt: new Date()
       },
       
       // Dra. Ana Martínez - Endodoncia y Periodoncia
       {
-        dentistId: dentistaMap['Dra. Ana Martínez'],
-        especialidadId: especialidadMap['Endodoncia'],
+        dentist_id: dentistaMap['Dra. Ana Martínez'],
+        especialidad_id: especialidadMap['Endodoncia'],
         createdAt: new Date(),
         updatedAt: new Date()
       },
       {
-        dentistId: dentistaMap['Dra. Ana Martínez'],
-        especialidadId: especialidadMap['Periodoncia'],
+        dentist_id: dentistaMap['Dra. Ana Martínez'],
+        especialidad_id: especialidadMap['Periodoncia'],
         createdAt: new Date(),
         updatedAt: new Date()
       },
       
       // Dr. Luis Pérez - Cirugía Oral y Prótesis Dental
       {
-        dentistId: dentistaMap['Dr. Luis Pérez'],
-        especialidadId: especialidadMap['Cirugía Oral'],
+        dentist_id: dentistaMap['Dr. Luis Pérez'],
+        especialidad_id: especialidadMap['Cirugía Oral'],
         createdAt: new Date(),
         updatedAt: new Date()
       },
       {
-        dentistId: dentistaMap['Dr. Luis Pérez'],
-        especialidadId: especialidadMap['Prótesis Dental'],
+        dentist_id: dentistaMap['Dr. Luis Pérez'],
+        especialidad_id: especialidadMap['Prótesis Dental'],
         createdAt: new Date(),
         updatedAt: new Date()
       }

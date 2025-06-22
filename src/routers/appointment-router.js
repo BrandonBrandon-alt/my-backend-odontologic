@@ -1,13 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const appointmentController = require('../controllers/appointment-controller');
-const authMiddleware = require('../middleware/auth-middleware');
+const { authenticateToken } = require('../middleware/auth-middleware');
 
 // Rutas públicas (sin autenticación)
 router.post('/guest', appointmentController.createGuestAppointment);
 
 // Rutas protegidas (requieren autenticación)
-router.use(authMiddleware);
+router.use(authenticateToken);
 
 // Crear cita como usuario registrado
 router.post('/user', appointmentController.createUserAppointment);
