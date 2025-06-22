@@ -1,6 +1,10 @@
 // filepath: app.js
 const express = require('express');
 const cors = require('cors');
+
+// Inicializar modelos y conexión a la base de datos
+require('./models/index');
+
 const authRouter = require('./routers/auth-router');
 const userRouter = require('./routers/user-router');
 const app = express();

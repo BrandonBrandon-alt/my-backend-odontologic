@@ -7,7 +7,7 @@ const { Op } = require("sequelize");
 const createUserDTO = require('../dtos/registro-dto');
 const loginDTO = require('../dtos/login-dto');
 const resetPasswordDTO = require('../dtos/reset-password-dto');
-const { User } = require('../models/user-model')
+const { User } = require('../models/index');
 const { sendActivationEmail, sendPasswordResetEmail } = require('../utils/mailer');
 
 let refreshTokens = [];

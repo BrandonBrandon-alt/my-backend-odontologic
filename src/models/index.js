@@ -104,9 +104,10 @@ ServiceType.belongsTo(Especialidad, {
 });
 
 // --- Sincronización de la Base de Datos ---
-sequelize.sync({ alter: true }) // 'alter: true' modificará las tablas existentes sin borrarlas. Úsalo con precaución en producción.
-  .then(() => console.log('Base de datos y tablas sincronizadas correctamente.'))
-  .catch(err => console.error('Error al sincronizar la base de datos:', err));
+// Comentado para evitar sincronización automática
+// sequelize.sync({ alter: true }) // 'alter: true' modificará las tablas existentes sin borrarlas. Úsalo con precaución en producción.
+//   .then(() => console.log('Base de datos y tablas sincronizadas correctamente.'))
+//   .catch(err => console.error('Error al sincronizar la base de datos:', err));
 
 // Exporta todos los modelos y la instancia de Sequelize
 module.exports = {

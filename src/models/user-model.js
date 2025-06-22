@@ -1,15 +1,4 @@
-require("dotenv").config();
 const { DataTypes } = require("sequelize");
-const sequelize = new Sequelize(
-  process.env.DB_NAME,
-  process.env.DB_USER,
-  process.env.DB_PASS,
-  {
-    host: process.env.DB_HOST,
-    dialect: "postgres",
-    logging: false, // Puedes dejarlo en true para ver las consultas SQL en desarrollo
-  }
-);
 
 module.exports = (sequelize) => {
   const User = sequelize.define("User", {
@@ -40,19 +29,17 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING,
       allowNull: true,
     },
-    // Nuevo campo para la fecha de expiración del código de activación
     activation_expires_at: {
-      type: DataTypes.DATE, // Tipo de dato para almacenar fechas y horas
-      allowNull: true, // Puede ser nulo si el código no está activo o si ya expiró/fue usado
+      type: DataTypes.DATE,
+      allowNull: true,
     },
     password_reset_code: {
       type: DataTypes.STRING,
       allowNull: true,
     },
-    // Nuevo campo para la fecha de expiración del código de reseteo de contraseña
     password_reset_expires_at: {
-      type: DataTypes.DATE, // Tipo de dato para almacenar fechas y horas
-      allowNull: true, // Puede ser nulo si el código no está activo o si ya expiró/fue usado
+      type: DataTypes.DATE,
+      allowNull: true,
     },
   }, {
     tableName: 'users',

@@ -1,8 +1,9 @@
 const request = require("supertest");
-const { User, sequelize } = require('../models/user-model');
+const { User, sequelize } = require('../models/index');
 const express = require("express");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const app = require('../app');
 
 require("dotenv").config();
 

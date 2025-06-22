@@ -1,4 +1,4 @@
-const { User } = require('../models/user-model');
+const { User } = require('../models/index');
 const resetPassword = require('../dtos/changed-password-dto');
 const updateProfileJoiSchema = require('../dtos/update-profile-dto');
 const bcrypt = require('bcrypt');
