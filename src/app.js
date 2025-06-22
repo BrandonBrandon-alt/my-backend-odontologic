@@ -7,6 +7,7 @@ require('./models/index');
 
 const authRouter = require('./routers/auth-router');
 const userRouter = require('./routers/user-router');
+const guestPatientRouter = require('./routers/guest-patient-router');
 const app = express();
 
 // Configuración de CORS
@@ -19,5 +20,6 @@ app.use(cors({
 app.use(express.json()); // Middleware para parsear JSON en el cuerpo de las solicitudes
 app.use('/api', authRouter); // Prefijo '/api' para tus rutas de autenticación
 app.use('/api/user', userRouter); // Prefijo '/api/user' para tus rutas de usuario
+app.use('/api/guest-patients', guestPatientRouter); // Prefijo '/api/guest-patients' para rutas de pacientes invitados
 
 module.exports = app;

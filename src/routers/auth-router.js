@@ -18,12 +18,10 @@ router.post("/verificar-reset", authController.verifyResetCode);
 router.post("/logout", authController.logout);
 
 // ======================= EXPORTACIONES =======================
+module.exports = router;
+
+// Exportar utilidades de test como propiedades adicionales
 if (process.env.NODE_ENV === 'test') {
-    module.exports = {
-        router: router,
-        getRefreshTokens: authController.getRefreshTokens,
-        clearRefreshTokens: authController.clearRefreshTokens,
-    };
-} else {
-    module.exports = router;
+    module.exports.getRefreshTokens = authController.getRefreshTokens;
+    module.exports.clearRefreshTokens = authController.clearRefreshTokens;
 }
