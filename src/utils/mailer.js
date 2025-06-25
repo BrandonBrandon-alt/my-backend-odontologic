@@ -1,6 +1,20 @@
 require('dotenv').config();
 const nodemailer = require('nodemailer');
 
+// Define los colores de tu paleta directamente como constantes para usar en el HTML inline
+// Esto asegura la compatibilidad con la mayoría de los clientes de correo.
+const COLORS = {
+  primary: '#009688',         // Verde azulado
+  primaryDarker: '#004D40',  // Verde oscuro
+  secondary: '#B2DFDB',       // Verde agua claro
+  accent: '#00B8D4',          // Celeste acento
+  backgroundLight: '#F5F5F5',// Gris muy claro
+  backgroundDark: '#e8ddea', // Fondo alternativo suave
+  textDark: '#004D40',       // Gris azulado oscuro
+  success: '#4caf50',         // Verde éxito
+  error: '#e53935',           // Rojo error
+};
+
 // ======================= CONFIGURACIÓN DEL TRANSPORTADOR =======================
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -12,50 +26,193 @@ const transporter = nodemailer.createTransport({
 
 // ======================= FUNCIÓN GENÉRICA PARA ENVIAR EMAIL =======================
 async function sendEmail(to, subject, text, html) {
-  await transporter.sendMail({
-    from: process.env.EMAIL_USER,
-    to,
-    subject,
-    text,
-    html, // Permite enviar contenido HTML si se proporciona
-  });
+  try {
+    await transporter.sendMail({
+      from: `Odontologic <${process.env.EMAIL_USER}>`, // Nombre del remitente
+      to,
+      subject,
+      text,
+      html,
+    });
+    console.log(`Correo enviado a ${to} con asunto: ${subject}`);
+  } catch (error) {
+    console.error(`Error al enviar correo a ${to}:`, error);
+    throw new Error('No se pudo enviar el correo electrónico.');
+  }
+}
+
+// ======================= LAYOUT BASE DE EMAIL =======================
+// Función para generar un layout base para los correos
+function getBaseEmailLayout(contentHtml) {
+  return `
+    <div style="font-family: 'Inter', Arial, sans-serif; background-color: ${COLORS.backgroundLight}; margin: 0; padding: 20px; color: ${COLORS.textDark};">
+      <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+        <!-- Header -->
+        <tr>
+          <td style="background-color: ${COLORS.primary}; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+            <h1 style="color: #ffffff; font-size: 24px; margin: 0;">Odontologic</h1>
+          </td>
+        </tr>
+        <!-- Content -->
+        <tr>
+          <td style="padding: 30px;">
+            ${contentHtml}
+          </td>
+        </tr>
+        <!-- Footer -->
+        <tr>
+          <td style="background-color: ${COLORS.primaryDarker}; padding: 20px; text-align: center; border-radius: 0 0 8px 8px;">
+            <p style="color: #ffffff; font-size: 12px; margin: 0;">&copy; ${new Date().getFullYear()} Odontologic. Todos los derechos reservados.</p>
+            <p style="color: ${COLORS.secondary}; font-size: 11px; margin: 5px 0 0;">Este es un correo automático, por favor no respondas.</p>
+          </td>
+        </tr>
+      </table>
+    </div>
+  `;
 }
 
 // ======================= EMAIL DE ACTIVACIÓN DE CUENTA =======================
 async function sendActivationEmail(email, code) {
-  const html = `
-    <div style="font-family: Arial, sans-serif; color: #222;">
-      <h2>¡Bienvenido a odontologic!</h2>
-      <p>Gracias por registrarte. Usa el siguiente código para activar tu cuenta:</p>
-      <div style="font-size: 2em; font-weight: bold; color:rgb(255, 109, 199); margin: 20px 0;">${code}</div>
-      <p>Si no solicitaste este registro, puedes ignorar este correo.</p>
-    </div>
+  const content = `
+    <h2 style="color: ${COLORS.primaryDarker}; font-size: 20px; margin-top: 0;">¡Bienvenido a Odontologic!</h2>
+    <p style="font-size: 14px; line-height: 1.6; color: ${COLORS.textDark};">Gracias por registrarte. Usa el siguiente código para activar tu cuenta:</p>
+    <div style="font-size: 2.5em; font-weight: bold; color: ${COLORS.primary}; text-align: center; padding: 15px; background-color: ${COLORS.secondary}; border-radius: 5px; margin: 25px 0;">${code}</div>
+    <p style="font-size: 14px; line-height: 1.6; color: ${COLORS.textDark};">Este código es válido por un tiempo limitado. Por favor, actívalo pronto.</p>
+    <p style="font-size: 12px; color: #888; margin-top: 20px;">Si no solicitaste este registro, puedes ignorar este correo.</p>
   `;
+  const html = getBaseEmailLayout(content);
+
   await sendEmail(
     email,
-    'Activa tu cuenta',
-    `Tu código de activación es: ${code}`,
+    'Odontologic: Activa tu cuenta',
+    `Tu código de activación de Odontologic es: ${code}. Si no solicitaste esto, ignora este correo.`,
     html
   );
 }
 
 // ======================= EMAIL DE RECUPERACIÓN DE CONTRASEÑA =======================
 async function sendPasswordResetEmail(email, code) {
-  const html = `
-    <div style="font-family: Arial, sans-serif; color: #222;">
-      <h2>Recuperación de contraseña</h2>
-      <p>Usa el siguiente código para restablecer tu contraseña:</p>
-      <div style="font-size: 2em; font-weight: bold; color:rgb(44, 111, 255); margin: 20px 0;">${code}</div>
-      <p>Si no solicitaste este cambio, ignora este correo.</p>
-    </div>
+  const content = `
+    <h2 style="color: ${COLORS.primaryDarker}; font-size: 20px; margin-top: 0;">Recuperación de Contraseña</h2>
+    <p style="font-size: 14px; line-height: 1.6; color: ${COLORS.textDark};">Usa el siguiente código para restablecer tu contraseña:</p>
+    <div style="font-size: 2.5em; font-weight: bold; color: ${COLORS.accent}; text-align: center; padding: 15px; background-color: ${COLORS.backgroundDark}; border-radius: 5px; margin: 25px 0;">${code}</div>
+    <p style="font-size: 14px; line-height: 1.6; color: ${COLORS.textDark};">Este código es válido por un tiempo limitado.</p>
+    <p style="font-size: 12px; color: #888; margin-top: 20px;">Si no solicitaste este cambio de contraseña, ignora este correo.</p>
   `;
+  const html = getBaseEmailLayout(content);
+
   await sendEmail(
     email,
-    'Recupera tu contraseña',
-    `Tu código de recuperación es: ${code}`,
+    'Odontologic: Recupera tu Contraseña',
+    `Tu código de recuperación de contraseña de Odontologic es: ${code}. Si no solicitaste esto, ignora este correo.`,
+    html
+  );
+}
+
+// ======================= EMAIL DE CONFIRMACIÓN DE CITA =======================
+/**
+ * Envía un correo electrónico de confirmación de cita.
+ * @param {string} to - Dirección de correo electrónico del paciente.
+ * @param {object} appointmentDetails - Detalles de la cita.
+ * @param {string} appointmentDetails.patientName - Nombre completo del paciente.
+ * @param {string} appointmentDetails.patientEmail - Email del paciente.
+ * @param {string} appointmentDetails.patientPhone - Teléfono del paciente.
+ * @param {string} [appointmentDetails.patientIdNumber] - Número de identificación del paciente (opcional).
+ * @param {string} [appointmentDetails.patientNotes] - Notas adicionales del paciente (opcional).
+ * @param {string} appointmentDetails.doctorName - Nombre del doctor.
+ * @param {string} appointmentDetails.specialtyName - Nombre de la especialidad.
+ * @param {string} appointmentDetails.serviceTypeName - Nombre del tipo de servicio.
+ * @param {string} appointmentDetails.serviceTypeDescription - Descripción del tipo de servicio.
+ * @param {number} appointmentDetails.serviceTypeDuration - Duración del servicio en minutos.
+ * @param {string} appointmentDetails.appointmentDate - Fecha de la cita (ej. "YYYY-MM-DD").
+ * @param {string} appointmentDetails.appointmentStartTime - Hora de inicio de la cita (ej. "HH:MM").
+ * @param {string} appointmentDetails.appointmentEndTime - Hora de fin de la cita (ej. "HH:MM").
+ * @param {string} appointmentDetails.appointmentId - ID único de la cita.
+ */
+async function sendAppointmentConfirmationEmail(to, appointmentDetails) {
+  const {
+    patientName,
+    patientEmail,
+    patientPhone,
+    patientIdNumber,
+    patientNotes,
+    doctorName,
+    specialtyName,
+    serviceTypeName,
+    serviceTypeDescription,
+    serviceTypeDuration,
+    appointmentDate,
+    appointmentStartTime,
+    appointmentEndTime,
+    appointmentId
+  } = appointmentDetails;
+
+  // Formatear la fecha y hora para el correo
+  const formattedDate = new Date(appointmentDate).toLocaleDateString('es-CO', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+  const formattedStartTime = new Date(`2000-01-01T${appointmentStartTime}`).toLocaleTimeString('es-CO', {
+    hour: '2-digit', minute: '2-digit', hour12: true
+  });
+  const formattedEndTime = new Date(`2000-01-01T${appointmentEndTime}`).toLocaleTimeString('es-CO', {
+    hour: '2-digit', minute: '2-digit', hour12: true
+  });
+
+  const formatDuration = (minutes) => {
+    if (minutes < 60) return `${minutes} min`;
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}min` : `${hours}h`;
+  };
+
+  const content = `
+    <h2 style="color: ${COLORS.primaryDarker}; font-size: 20px; margin-top: 0;">¡Cita Confirmada, ${patientName}!</h2>
+    <p style="font-size: 14px; line-height: 1.6; color: ${COLORS.textDark};">Tu cita en Odontologic ha sido confirmada exitosamente. Aquí están los detalles:</p>
+
+    <div style="background-color: ${COLORS.backgroundLight}; border-left: 4px solid ${COLORS.primary}; padding: 15px; border-radius: 5px; margin: 20px 0;">
+      <h3 style="color: ${COLORS.primaryDarker}; font-size: 16px; margin-top: 0; margin-bottom: 10px;">Detalles de la Cita #${appointmentId}</h3>
+      <p style="font-size: 14px; margin: 5px 0;"><strong>Fecha:</strong> <span style="color: ${COLORS.textDark};">${formattedDate}</span></p>
+      <p style="font-size: 14px; margin: 5px 0;"><strong>Hora:</strong> <span style="color: ${COLORS.textDark};">${formattedStartTime} - ${formattedEndTime}</span></p>
+      <p style="font-size: 14px; margin: 5px 0;"><strong>Doctor(a):</strong> <span style="color: ${COLORS.textDark};">${doctorName} (${specialtyName})</span></p>
+      <p style="font-size: 14px; margin: 5px 0;"><strong>Servicio:</strong> <span style="color: ${COLORS.textDark};">${serviceTypeName}</span></p>
+      <p style="font-size: 14px; margin: 5px 0;"><strong>Descripción del Servicio:</strong> <span style="color: ${COLORS.textDark};">${serviceTypeDescription}</span></p>
+      <p style="font-size: 14px; margin: 5px 0;"><strong>Duración Estimada:</strong> <span style="color: ${COLORS.textDark};">${formatDuration(serviceTypeDuration)}</span></p>
+    </div>
+
+    <div style="margin-top: 25px; background-color: #f9f9f9; padding: 15px; border-radius: 5px;">
+        <h3 style="color: ${COLORS.textDark}; font-size: 16px; margin-top: 0; margin-bottom: 10px;">Información del Paciente</h3>
+        <p style="font-size: 14px; margin: 5px 0;"><strong>Email:</strong> ${patientEmail}</p>
+        <p style="font-size: 14px; margin: 5px 0;"><strong>Teléfono:</strong> ${patientPhone}</p>
+        ${patientIdNumber ? `<p style="font-size: 14px; margin: 5px 0;"><strong>Identificación:</strong> ${patientIdNumber}</p>` : ''}
+        ${patientNotes ? `<p style="font-size: 14px; margin: 5px 0;"><strong>Notas:</strong> ${patientNotes}</p>` : ''}
+    </div>
+
+    <div style="margin-top: 25px; background-color: ${COLORS.backgroundDark}; border-left: 4px solid ${COLORS.accent}; padding: 15px; border-radius: 5px;">
+      <h3 style="color: ${COLORS.textDark}; font-size: 16px; margin-top: 0; margin-bottom: 10px;">Información Importante:</h3>
+      <ul style="font-size: 13px; line-height: 1.5; color: ${COLORS.textDark}; padding-left: 20px; margin: 0;">
+        <li style="margin-bottom: 5px;">Llega al menos 10 minutos antes de tu cita para el registro.</li>
+        <li style="margin-bottom: 5px;">Trae contigo tu documento de identidad.</li>
+        <li style="margin-bottom: 5px;">Si tienes estudios previos relevantes, por favor tráelos.</li>
+        <li style="margin-bottom: 5px;">En caso de necesitar cancelar o reprogramar, hazlo con al menos 24 horas de anticipación.</li>
+      </ul>
+    </div>
+
+    <p style="font-size: 14px; line-height: 1.6; color: ${COLORS.textDark}; margin-top: 25px;">¡Esperamos verte pronto!</p>
+    <p style="font-size: 14px; line-height: 1.6; color: ${COLORS.primaryDarker}; font-weight: bold;">Equipo de Odontologic</p>
+  `;
+  const html = getBaseEmailLayout(content);
+
+  await sendEmail(
+    to,
+    `Odontologic: ¡Tu Cita #${appointmentId} ha sido Confirmada!`,
+    `Hola ${patientName}, tu cita con el Dr. ${doctorName} para ${serviceTypeName} el ${formattedDate} a las ${formattedStartTime} ha sido confirmada.`,
     html
   );
 }
 
 // ======================= EXPORTS =======================
-module.exports = { sendActivationEmail, sendPasswordResetEmail };
+module.exports = {
+  sendActivationEmail,
+  sendPasswordResetEmail,
+  sendAppointmentConfirmationEmail // Exporta la nueva función
+};

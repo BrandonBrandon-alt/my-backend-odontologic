@@ -1,10 +1,11 @@
 const { Appointment, GuestPatient, User, Disponibilidad, ServiceType, Especialidad } = require('../models');
 const { createGuestAppointmentSchema, createUserAppointmentSchema, updateAppointmentStatusSchema } = require('../dtos');
 const { validateAppointmentCreation, ValidationError } = require('../utils/appointment-validations');
+const { sendAppointmentConfirmationEmail } = require('../utils/mailer');
 
 const appointmentController = {
   // Crear cita como paciente invitado
-  async createGuestAppointment(req, res) {
+   async createGuestAppointment(req, res) {
     try {
       // Validar datos de entrada
       const { error, value } = createGuestAppointmentSchema.validate(req.body);
@@ -25,9 +26,12 @@ const appointmentController = {
         });
       }
   
-      // Obtener la disponibilidad
+      // Obtener la disponibilidad y el doctor asociado
       const disponibilidad = await Disponibilidad.findByPk(value.disponibilidad_id, {
-        include: [{ model: Especialidad, as: 'especialidad' }]
+        include: [
+          { model: Especialidad, as: 'especialidad' },
+          { model: User, as: 'dentist', attributes: ['id', 'name'] } // Incluye al dentista
+        ]
       });
       
       if (!disponibilidad) {
@@ -37,7 +41,7 @@ const appointmentController = {
         });
       }
   
-      // Usar la hora de inicio de la disponibilidad (ignorar preferred_time del frontend)
+      // Usar la hora de inicio de la disponibilidad
       const horaCita = disponibilidad.start_time.split(':').slice(0, 2).join(':');
   
       // Obtener el tipo de servicio
@@ -49,23 +53,59 @@ const appointmentController = {
         });
       }
   
-      // Crear la cita con la hora correcta
+      // Crear la cita
       const appointment = await Appointment.create({
         guest_patient_id: value.guest_patient_id,
         disponibilidad_id: value.disponibilidad_id,
         service_type_id: value.service_type_id,
         preferred_date: value.preferred_date,
-        preferred_time: horaCita, // ← Usar hora de la disponibilidad
+        preferred_time: horaCita,
         status: 'pending',
         appointment_type: 'guest',
         notes: value.notes || null
       });
   
+      // Preparar los datos completos para el correo de confirmación
+      const appointmentDetailsForEmail = {
+        patientName: guestPatient.name,
+        patientEmail: guestPatient.email,
+        patientPhone: guestPatient.phone,
+        patientIdNumber: guestPatient.id_number || null, // Asegúrate de que este campo exista en GuestPatient si lo usas
+        patientNotes: appointment.notes || null, // Usar las notas de la cita
+        doctorName: disponibilidad.dentist.name, // Del include de disponibilidad
+        specialtyName: disponibilidad.especialidad.name, // Del include de disponibilidad
+        serviceTypeName: serviceType.name,
+        serviceTypeDescription: serviceType.description || '', // Asegúrate de que serviceType.description exista
+        serviceTypeDuration: serviceType.duration,
+        appointmentDate: appointment.preferred_date,
+        appointmentStartTime: appointment.preferred_time,
+        appointmentEndTime: disponibilidad.end_time, // De la disponibilidad
+        appointmentId: appointment.id
+      };
+
+      // Enviar el correo de confirmación
+      // Es buena práctica hacer esto después de enviar la respuesta HTTP
+      // o envolverlo en un try/catch separado para no bloquear la respuesta
+      // si el envío de correo falla.
+      try {
+        await sendAppointmentConfirmationEmail(
+          guestPatient.email,
+          appointmentDetailsForEmail
+        );
+        console.log('Correo de confirmación de cita enviado.');
+      } catch (emailError) {
+        console.error('Error al enviar el correo de confirmación:', emailError);
+        // Puedes agregar aquí un manejo de errores más sofisticado, como un sistema de reintentos
+      }
+
+      // Enviar la respuesta HTTP al cliente
       res.status(201).json({
         success: true,
         message: 'Cita creada exitosamente',
         data: {
           id: appointment.id,
+          // Incluye aquí los datos que quieres devolver al frontend,
+          // posiblemente usando un DTO de salida para Appointment
           guest_patient: {
             id: guestPatient.id,
             name: guestPatient.name,
@@ -77,15 +117,17 @@ const appointmentController = {
             date: disponibilidad.date,
             start_time: disponibilidad.start_time,
             end_time: disponibilidad.end_time,
-            especialidad: disponibilidad.especialidad.name
+            especialidad: disponibilidad.especialidad.name,
+            dentist: disponibilidad.dentist.name // Añade el nombre del dentista si lo necesitas en la respuesta
           },
           service_type: {
             id: serviceType.id,
             name: serviceType.name,
-            duration: serviceType.duration
+            duration: serviceType.duration,
+            description: serviceType.description // Añade la descripción si es relevante para el front
           },
           preferred_date: appointment.preferred_date,
-          preferred_time: appointment.preferred_time, // ← Hora corregida
+          preferred_time: appointment.preferred_time,
           status: appointment.status,
           appointment_type: appointment.appointment_type,
           notes: appointment.notes
@@ -95,12 +137,15 @@ const appointmentController = {
     } catch (error) {
       console.error('Error al crear cita como invitado:', error);
       
-      if (error instanceof ValidationError) {
-        return res.status(error.statusCode).json({
-          success: false,
-          message: error.message
-        });
-      }
+      // Asegúrate de que ValidationError esté correctamente importado si lo usas
+      // const { ValidationError } = require('sequelize'); // o de tu archivo de errores custom
+      // if (error instanceof ValidationError) {
+      //   return res.status(400).json({ // 400 para errores de validación de Sequelize
+      //     success: false,
+      //     message: error.message,
+      //     errors: error.errors ? error.errors.map(err => ({ field: err.path, message: err.message })) : undefined
+      //   });
+      // }
   
       res.status(500).json({
         success: false,
@@ -108,6 +153,7 @@ const appointmentController = {
       });
     }
   },
+
 
   // Crear cita como usuario registrado
   async createUserAppointment(req, res) {
