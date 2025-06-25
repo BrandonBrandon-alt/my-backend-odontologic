@@ -4,10 +4,12 @@ const { validateAppointmentCreation, ValidationError } = require('../utils/appoi
 const { sendAppointmentConfirmationEmail } = require('../utils/mailer');
 
 const appointmentController = {
-  // Crear cita como paciente invitado
-   async createGuestAppointment(req, res) {
+  // Crear cita como paciente invitado (lógica atómica)
+  async createGuestAppointment(req, res) {
+    const t = await Appointment.sequelize.transaction();
+
     try {
-      // Validar datos de entrada
+      // 1. Validar el payload combinado (paciente + cita)
       const { error, value } = createGuestAppointmentSchema.validate(req.body);
       if (error) {
         return res.status(400).json({
@@ -16,141 +18,136 @@ const appointmentController = {
           errors: error.details.map(detail => detail.message)
         });
       }
-  
-      // Verificar que el paciente invitado existe
-      const guestPatient = await GuestPatient.findByPk(value.guest_patient_id);
-      if (!guestPatient) {
-        return res.status(404).json({
+
+      const { guest_patient, disponibilidad_id, service_type_id, preferred_date, notes } = value;
+
+      // 2. Buscar o crear al paciente invitado dentro de la transacción
+      let patient = await GuestPatient.findOne({
+        where: { email: guest_patient.email },
+        transaction: t
+      });
+
+      if (!patient) {
+        patient = await GuestPatient.create({
+          name: guest_patient.name,
+          email: guest_patient.email,
+          phone: guest_patient.phone,
+          is_active: true
+        }, { transaction: t });
+      } else {
+        // Opcional: Actualizar datos si el paciente ya existía
+        patient.name = guest_patient.name;
+        patient.phone = guest_patient.phone;
+        await patient.save({ transaction: t });
+      }
+
+      // 3. Validar que la cita no se agende en el pasado (comparando strings)
+      const today = new Date().toISOString().split('T')[0];
+      if (preferred_date < today) {
+        return res.status(400).json({
           success: false,
-          message: 'Paciente invitado no encontrado'
+          message: 'No se puede agendar una cita en una fecha pasada.'
         });
       }
-  
-      // Obtener la disponibilidad y el doctor asociado
-      const disponibilidad = await Disponibilidad.findByPk(value.disponibilidad_id, {
+
+      // 4. Validar la disponibilidad
+      const disponibilidad = await Disponibilidad.findByPk(disponibilidad_id, {
         include: [
           { model: Especialidad, as: 'especialidad' },
-          { model: User, as: 'dentist', attributes: ['id', 'name'] } // Incluye al dentista
-        ]
+          { model: User, as: 'dentist', attributes: ['id', 'name'] }
+        ],
+        transaction: t
       });
-      
+
       if (!disponibilidad) {
-        return res.status(404).json({
+        return res.status(404).json({ success: false, message: 'Disponibilidad no encontrada' });
+      }
+
+      const existingAppointment = await Appointment.findOne({
+        where: { disponibilidad_id },
+        transaction: t
+      });
+
+      if (existingAppointment) {
+        return res.status(409).json({ success: false, message: 'Este horario ya no está disponible.' });
+      }
+
+      const expectedDate = new Date(disponibilidad.date).toISOString().split('T')[0];
+      if (expectedDate !== preferred_date) {
+        return res.status(400).json({
           success: false,
-          message: 'Disponibilidad no encontrada'
+          message: `La fecha proporcionada (${preferred_date}) no coincide con la fecha del horario seleccionado (${expectedDate}).`
         });
       }
-  
-      // Usar la hora de inicio de la disponibilidad
-      const horaCita = disponibilidad.start_time.split(':').slice(0, 2).join(':');
-  
-      // Obtener el tipo de servicio
-      const serviceType = await ServiceType.findByPk(value.service_type_id);
+
+      // 5. Validar el tipo de servicio y la duración
+      const serviceType = await ServiceType.findByPk(service_type_id, { transaction: t });
       if (!serviceType) {
-        return res.status(404).json({
-          success: false,
-          message: 'Tipo de servicio no encontrado'
-        });
+        return res.status(404).json({ success: false, message: 'Tipo de servicio no encontrado' });
       }
-  
-      // Crear la cita
+
+      const startTime = new Date(`1970-01-01T${disponibilidad.start_time}`);
+      const endTime = new Date(`1970-01-01T${disponibilidad.end_time}`);
+      const slotDuration = (endTime - startTime) / (1000 * 60);
+
+      if (serviceType.duration > slotDuration) {
+        return res.status(400).json({ success: false, message: `El servicio requiere ${serviceType.duration} min, pero el espacio es de ${slotDuration} min.` });
+      }
+
+      // 6. Crear la cita
+      const horaCita = disponibilidad.start_time.split(':').slice(0, 2).join(':');
       const appointment = await Appointment.create({
-        guest_patient_id: value.guest_patient_id,
-        disponibilidad_id: value.disponibilidad_id,
-        service_type_id: value.service_type_id,
-        preferred_date: value.preferred_date,
+        guest_patient_id: patient.id,
+        disponibilidad_id,
+        service_type_id,
+        preferred_date,
         preferred_time: horaCita,
         status: 'pending',
         appointment_type: 'guest',
-        notes: value.notes || null
-      });
-  
+        notes: notes || null
+      }, { transaction: t });
+
+      // 7. Si todo es correcto, confirmar la transacción
+      await t.commit();
+     
+
+
       // Preparar los datos completos para el correo de confirmación
-      const appointmentDetailsForEmail = {
-        patientName: guestPatient.name,
-        patientEmail: guestPatient.email,
-        patientPhone: guestPatient.phone,
-        patientIdNumber: guestPatient.id_number || null, // Asegúrate de que este campo exista en GuestPatient si lo usas
-        patientNotes: appointment.notes || null, // Usar las notas de la cita
-        doctorName: disponibilidad.dentist.name, // Del include de disponibilidad
-        specialtyName: disponibilidad.especialidad.name, // Del include de disponibilidad
+
+
+      // 8. Enviar correo de confirmación (fuera de la transacción)
+      const emailDetails = {
+        patientEmail: patient.email, // CORREGIDO: Usar 'patient' en lugar de 'guestPatient'
+        patientPhone: patient.phone, // CORREGIDO: Usar 'patient' en lugar de 'guestPatient'
+        patientIdNumber: guest_patient.id_number || null, // Del payload de entrada, ya que puede no estar en el modelo patient si es invitado
+        patientNotes: appointment.notes || null,
+        doctorName: disponibilidad.dentist.name,
+        specialtyName: disponibilidad.especialidad.name,
         serviceTypeName: serviceType.name,
-        serviceTypeDescription: serviceType.description || '', // Asegúrate de que serviceType.description exista
+        serviceTypeDescription: serviceType.description || '',
         serviceTypeDuration: serviceType.duration,
         appointmentDate: appointment.preferred_date,
         appointmentStartTime: appointment.preferred_time,
-        appointmentEndTime: disponibilidad.end_time, // De la disponibilidad
+        appointmentEndTime: disponibilidad.end_time,
         appointmentId: appointment.id
       };
-
-      // Enviar el correo de confirmación
-      // Es buena práctica hacer esto después de enviar la respuesta HTTP
-      // o envolverlo en un try/catch separado para no bloquear la respuesta
-      // si el envío de correo falla.
       try {
-        await sendAppointmentConfirmationEmail(
-          guestPatient.email,
-          appointmentDetailsForEmail
-        );
-        console.log('Correo de confirmación de cita enviado.');
+        await sendAppointmentConfirmationEmail(patient.email, emailDetails);
       } catch (emailError) {
-        console.error('Error al enviar el correo de confirmación:', emailError);
-        // Puedes agregar aquí un manejo de errores más sofisticado, como un sistema de reintentos
+        console.error('Error al enviar correo:', emailError);
       }
 
-      // Enviar la respuesta HTTP al cliente
+      // 9. Enviar respuesta exitosa
       res.status(201).json({
         success: true,
         message: 'Cita creada exitosamente',
-        data: {
-          id: appointment.id,
-          // Incluye aquí los datos que quieres devolver al frontend,
-          // posiblemente usando un DTO de salida para Appointment
-          guest_patient: {
-            id: guestPatient.id,
-            name: guestPatient.name,
-            phone: guestPatient.phone,
-            email: guestPatient.email
-          },
-          disponibilidad: {
-            id: disponibilidad.id,
-            date: disponibilidad.date,
-            start_time: disponibilidad.start_time,
-            end_time: disponibilidad.end_time,
-            especialidad: disponibilidad.especialidad.name,
-            dentist: disponibilidad.dentist.name // Añade el nombre del dentista si lo necesitas en la respuesta
-          },
-          service_type: {
-            id: serviceType.id,
-            name: serviceType.name,
-            duration: serviceType.duration,
-            description: serviceType.description // Añade la descripción si es relevante para el front
-          },
-          preferred_date: appointment.preferred_date,
-          preferred_time: appointment.preferred_time,
-          status: appointment.status,
-          appointment_type: appointment.appointment_type,
-          notes: appointment.notes
-        }
+        data: { id: appointment.id /* ... más datos si son necesarios ... */ }
       });
-  
+
     } catch (error) {
-      console.error('Error al crear cita como invitado:', error);
-      
-      // Asegúrate de que ValidationError esté correctamente importado si lo usas
-      // const { ValidationError } = require('sequelize'); // o de tu archivo de errores custom
-      // if (error instanceof ValidationError) {
-      //   return res.status(400).json({ // 400 para errores de validación de Sequelize
-      //     success: false,
-      //     message: error.message,
-      //     errors: error.errors ? error.errors.map(err => ({ field: err.path, message: err.message })) : undefined
-      //   });
-      // }
-  
-      res.status(500).json({
-        success: false,
-        message: 'Error interno del servidor'
-      });
+      await t.rollback();
+      console.error('Error al crear cita de invitado:', error);
+      res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
   },
 
@@ -220,7 +217,7 @@ const appointmentController = {
 
     } catch (error) {
       console.error('Error al crear cita como usuario:', error);
-      
+
       // Manejar errores de validación específicos
       if (error instanceof ValidationError) {
         return res.status(error.statusCode).json({
@@ -378,7 +375,7 @@ const appointmentController = {
     try {
       const { id } = req.params;
       const { error, value } = updateAppointmentStatusSchema.validate(req.body);
-      
+
       if (error) {
         return res.status(400).json({
           success: false,

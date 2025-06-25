@@ -1,4 +1,5 @@
-require('dotenv').config();
+require('dotenv').config(); // Asegúrate de que esto se ejecute al inicio de tu aplicación para cargar las variables de entorno
+const e = require('cors');
 const nodemailer = require('nodemailer');
 
 // Define los colores de tu paleta directamente como constantes para usar en el HTML inline
@@ -37,6 +38,7 @@ async function sendEmail(to, subject, text, html) {
     console.log(`Correo enviado a ${to} con asunto: ${subject}`);
   } catch (error) {
     console.error(`Error al enviar correo a ${to}:`, error);
+    // Propaga el error para que pueda ser capturado por el try/catch del controlador
     throw new Error('No se pudo enviar el correo electrónico.');
   }
 }
@@ -210,7 +212,6 @@ async function sendAppointmentConfirmationEmail(to, appointmentDetails) {
   );
 }
 
-// ======================= EXPORTS =======================
 module.exports = {
   sendActivationEmail,
   sendPasswordResetEmail,
