@@ -1,378 +1,82 @@
-const { ServiceType, Especialidad } = require('../models');
+import React from 'react';
+import { motion } from 'framer-motion';
+import { CalendarIcon, ClockIcon } from '@heroicons/react/24/outline';
 
-const serviceTypeController = {
-  // Obtener todos los tipos de servicio activos
-  async getAll(req, res) {
-    try {
-      const serviceTypes = await ServiceType.findAll({
-        where: { is_active: true },
-        include: [
-          {
-            model: Especialidad,
-            as: 'especialidad',
-            where: { is_active: true },
-            attributes: ['id', 'name']
-          }
-        ],
-        order: [['name', 'ASC']]
-      });
-
-      res.json({
-        success: true,
-        data: serviceTypes.map(serviceType => ({
-          id: serviceType.id,
-          name: serviceType.name,
-          description: serviceType.description,
-          duration: serviceType.duration,
-          price: serviceType.price,
-          especialidad: {
-            id: serviceType.especialidad.id,
-            name: serviceType.especialidad.name
-          }
-        }))
-      });
-
-    } catch (error) {
-      console.error('Error al obtener tipos de servicio:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error interno del servidor'
-      });
+function SelectorTipoServicio({ tiposServicio, onSelect, selected }) {
+  const formatDuration = (minutes) => {
+    if (minutes < 60) {
+      return `${minutes} min`;
     }
-  },
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}min` : `${hours}h`;
+  };
 
-  // Obtener tipos de servicio por especialidad
-  async getByEspecialidad(req, res) {
-    try {
-      const { especialidad_id } = req.params;
+  return (
+    <div className="space-y-6">
+      <div className="text-center">
+        <CalendarIcon className="w-12 h-12 text-primary mx-auto mb-4" />
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">
+          Selecciona un Tipo de Servicio
+        </h2>
+        <p className="text-gray-600">
+          Elige el servicio específico que necesitas
+        </p>
+      </div>
 
-      const serviceTypes = await ServiceType.findAll({
-        where: { 
-          especialidad_id,
-          is_active: true 
-        },
-        include: [
-          {
-            model: Especialidad,
-            as: 'especialidad',
-            where: { is_active: true },
-            attributes: ['id', 'name']
-          }
-        ],
-        order: [['name', 'ASC']]
-      });
+      {/* Grid mejorado para mostrar más columnas en pantallas grandes */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {tiposServicio.map((servicio) => (
+          <motion.div
+            key={servicio.id}
+            whileHover={{ scale: 1.02 }} // Un ligero escalado al pasar el ratón
+            whileTap={{ scale: 0.98 }}   // Un ligero "hundimiento" al hacer clic
+            onClick={() => onSelect(servicio.id)}
+            className={`p-6 rounded-xl border-2 cursor-pointer transition-all duration-200 ease-in-out
+              ${selected === servicio.id
+                ? 'border-primary-600 bg-primary-50 text-primary-900 shadow-xl' // Estilo más fuerte para la selección
+                : 'border-gray-200 bg-white text-gray-800 hover:border-primary-300 hover:shadow-lg' // Estilo de hover mejorado
+              }`}
+          >
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-xl font-semibold mb-2"> {/* Elimine el text-gray-900 directo, el color lo da el padre */}
+                  {servicio.name}
+                </h3>
+                <p className="text-sm"> {/* Elimine el text-gray-600 directo */}
+                  {servicio.description}
+                </p>
+              </div>
 
-      res.json({
-        success: true,
-        data: serviceTypes.map(serviceType => ({
-          id: serviceType.id,
-          name: serviceType.name,
-          description: serviceType.description,
-          duration: serviceType.duration,
-          price: serviceType.price,
-          especialidad: {
-            id: serviceType.especialidad.id,
-            name: serviceType.especialidad.name
-          }
-        }))
-      });
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center space-x-1 text-sm"> {/* Elimine el text-gray-600 directo */}
+                    <ClockIcon className="w-4 h-4" /> {/* Icono de reloj */}
+                    <span>{formatDuration(servicio.duration)}</span>
+                  </div>
+                </div>
+                {/* Bloque de precio eliminado (ya lo habías quitado) */}
+              </div>
 
-    } catch (error) {
-      console.error('Error al obtener tipos de servicio por especialidad:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error interno del servidor'
-      });
-    }
-  },
+              <div className="pt-2 border-t border-gray-100">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">Duración estimada:</span>
+                  <span className="font-medium">{formatDuration(servicio.duration)}</span>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </div>
 
-  // Obtener un tipo de servicio por ID
-  async getById(req, res) {
-    try {
-      const { id } = req.params;
+      {tiposServicio.length === 0 && (
+        <div className="text-center py-8">
+          <CalendarIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <p className="text-gray-500">No hay tipos de servicio disponibles</p>
+        </div>
+      )}
+    </div>
+  );
+}
 
-      const serviceType = await ServiceType.findOne({
-        where: { id, is_active: true },
-        include: [
-          {
-            model: Especialidad,
-            as: 'especialidad',
-            where: { is_active: true },
-            attributes: ['id', 'name']
-          }
-        ]
-      });
-
-      if (!serviceType) {
-        return res.status(404).json({
-          success: false,
-          message: 'Tipo de servicio no encontrado'
-        });
-      }
-
-      res.json({
-        success: true,
-        data: {
-          id: serviceType.id,
-          name: serviceType.name,
-          description: serviceType.description,
-          duration: serviceType.duration,
-          price: serviceType.price,
-          especialidad: {
-            id: serviceType.especialidad.id,
-            name: serviceType.especialidad.name
-          }
-        }
-      });
-
-    } catch (error) {
-      console.error('Error al obtener tipo de servicio:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error interno del servidor'
-      });
-    }
-  },
-
-  // Crear un nuevo tipo de servicio
-  async create(req, res) {
-    try {
-      const { name, description, duration, price, especialidad_id } = req.body;
-
-      // Validaciones básicas
-      if (!name || name.trim().length < 2) {
-        return res.status(400).json({
-          success: false,
-          message: 'El nombre del servicio es requerido y debe tener al menos 2 caracteres'
-        });
-      }
-
-      if (!duration || duration < 15) {
-        return res.status(400).json({
-          success: false,
-          message: 'La duración es requerida y debe ser al menos 15 minutos'
-        });
-      }
-
-      if (!price || price <= 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'El precio es requerido y debe ser mayor a 0'
-        });
-      }
-
-      if (!especialidad_id) {
-        return res.status(400).json({
-          success: false,
-          message: 'La especialidad es requerida'
-        });
-      }
-
-      // Verificar que la especialidad existe
-      const especialidad = await Especialidad.findOne({
-        where: { id: especialidad_id, is_active: true }
-      });
-
-      if (!especialidad) {
-        return res.status(404).json({
-          success: false,
-          message: 'Especialidad no encontrada'
-        });
-      }
-
-      // Verificar si ya existe un servicio con el mismo nombre en la misma especialidad
-      const existingServiceType = await ServiceType.findOne({
-        where: { 
-          name: name.trim(), 
-          especialidad_id,
-          is_active: true 
-        }
-      });
-
-      if (existingServiceType) {
-        return res.status(409).json({
-          success: false,
-          message: 'Ya existe un servicio con este nombre en esta especialidad'
-        });
-      }
-
-      // Crear el tipo de servicio
-      const serviceType = await ServiceType.create({
-        name: name.trim(),
-        description: description || null,
-        duration: parseInt(duration),
-        price: parseFloat(price),
-        especialidad_id,
-        is_active: true
-      });
-
-      res.status(201).json({
-        success: true,
-        message: 'Tipo de servicio creado exitosamente',
-        data: {
-          id: serviceType.id,
-          name: serviceType.name,
-          description: serviceType.description,
-          duration: serviceType.duration,
-          price: serviceType.price,
-          especialidad: {
-            id: especialidad.id,
-            name: especialidad.name
-          }
-        }
-      });
-
-    } catch (error) {
-      console.error('Error al crear tipo de servicio:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error interno del servidor'
-      });
-    }
-  },
-
-  // Actualizar un tipo de servicio
-  async update(req, res) {
-    try {
-      const { id } = req.params;
-      const { name, description, duration, price, especialidad_id } = req.body;
-
-      // Validaciones básicas
-      if (!name || name.trim().length < 2) {
-        return res.status(400).json({
-          success: false,
-          message: 'El nombre del servicio es requerido y debe tener al menos 2 caracteres'
-        });
-      }
-
-      if (!duration || duration < 15) {
-        return res.status(400).json({
-          success: false,
-          message: 'La duración es requerida y debe ser al menos 15 minutos'
-        });
-      }
-
-      if (!price || price <= 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'El precio es requerido y debe ser mayor a 0'
-        });
-      }
-
-      if (!especialidad_id) {
-        return res.status(400).json({
-          success: false,
-          message: 'La especialidad es requerida'
-        });
-      }
-
-      // Buscar el tipo de servicio
-      const serviceType = await ServiceType.findOne({
-        where: { id, is_active: true }
-      });
-
-      if (!serviceType) {
-        return res.status(404).json({
-          success: false,
-          message: 'Tipo de servicio no encontrado'
-        });
-      }
-
-      // Verificar que la especialidad existe
-      const especialidad = await Especialidad.findOne({
-        where: { id: especialidad_id, is_active: true }
-      });
-
-      if (!especialidad) {
-        return res.status(404).json({
-          success: false,
-          message: 'Especialidad no encontrada'
-        });
-      }
-
-      // Verificar si el nuevo nombre ya existe en la misma especialidad
-      if (name.trim() !== serviceType.name || especialidad_id !== serviceType.especialidad_id) {
-        const existingServiceType = await ServiceType.findOne({
-          where: { 
-            name: name.trim(), 
-            especialidad_id,
-            is_active: true 
-          }
-        });
-
-        if (existingServiceType) {
-          return res.status(409).json({
-            success: false,
-            message: 'Ya existe un servicio con este nombre en esta especialidad'
-          });
-        }
-      }
-
-      // Actualizar el tipo de servicio
-      const updatedServiceType = await serviceType.update({
-        name: name.trim(),
-        description: description || null,
-        duration: parseInt(duration),
-        price: parseFloat(price),
-        especialidad_id
-      });
-
-      res.json({
-        success: true,
-        message: 'Tipo de servicio actualizado exitosamente',
-        data: {
-          id: updatedServiceType.id,
-          name: updatedServiceType.name,
-          description: updatedServiceType.description,
-          duration: updatedServiceType.duration,
-          price: updatedServiceType.price,
-          especialidad: {
-            id: especialidad.id,
-            name: especialidad.name
-          }
-        }
-      });
-
-    } catch (error) {
-      console.error('Error al actualizar tipo de servicio:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error interno del servidor'
-      });
-    }
-  },
-
-  // Desactivar un tipo de servicio (soft delete)
-  async deactivate(req, res) {
-    try {
-      const { id } = req.params;
-
-      const serviceType = await ServiceType.findOne({
-        where: { id, is_active: true }
-      });
-
-      if (!serviceType) {
-        return res.status(404).json({
-          success: false,
-          message: 'Tipo de servicio no encontrado'
-        });
-      }
-
-      await serviceType.update({ is_active: false });
-
-      res.json({
-        success: true,
-        message: 'Tipo de servicio desactivado exitosamente'
-      });
-
-    } catch (error) {
-      console.error('Error al desactivar tipo de servicio:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error interno del servidor'
-      });
-    }
-  }
-};
-
-module.exports = serviceTypeController; 
+export default SelectorTipoServicio;

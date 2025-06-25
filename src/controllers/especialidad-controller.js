@@ -1,4 +1,6 @@
 const { Especialidad } = require('../models');
+// Importa el DTO que creaste
+const EspecialidadOutputDto = require('../dtos/especialidad-dto'); // Ajusta la ruta si es necesario
 
 const especialidadController = {
   // Obtener todas las especialidades activas
@@ -9,13 +11,10 @@ const especialidadController = {
         order: [['name', 'ASC']]
       });
 
+      // Usa el método estático fromList del DTO para mapear todas las especialidades
       res.json({
         success: true,
-        data: especialidades.map(especialidad => ({
-          id: especialidad.id,
-          name: especialidad.name,
-          description: especialidad.description
-        }))
+        data: EspecialidadOutputDto.fromList(especialidades)
       });
 
     } catch (error) {
@@ -43,13 +42,10 @@ const especialidadController = {
         });
       }
 
+      // Usa el constructor del DTO para formatear la especialidad individual
       res.json({
         success: true,
-        data: {
-          id: especialidad.id,
-          name: especialidad.name,
-          description: especialidad.description
-        }
+        data: new EspecialidadOutputDto(especialidad)
       });
 
     } catch (error) {
@@ -66,7 +62,7 @@ const especialidadController = {
     try {
       const { name, description } = req.body;
 
-      // Validaciones básicas
+      // Validaciones básicas (idealmente, se harían con un Input DTO y una librería de validación)
       if (!name || name.trim().length < 2) {
         return res.status(400).json({
           success: false,
@@ -96,11 +92,8 @@ const especialidadController = {
       res.status(201).json({
         success: true,
         message: 'Especialidad creada exitosamente',
-        data: {
-          id: especialidad.id,
-          name: especialidad.name,
-          description: especialidad.description
-        }
+        // Usa el constructor del DTO para formatear la especialidad creada
+        data: new EspecialidadOutputDto(especialidad)
       });
 
     } catch (error) {
@@ -161,11 +154,8 @@ const especialidadController = {
       res.json({
         success: true,
         message: 'Especialidad actualizada exitosamente',
-        data: {
-          id: updatedEspecialidad.id,
-          name: updatedEspecialidad.name,
-          description: updatedEspecialidad.description
-        }
+        // Usa el constructor del DTO para formatear la especialidad actualizada
+        data: new EspecialidadOutputDto(updatedEspecialidad)
       });
 
     } catch (error) {
@@ -195,9 +185,14 @@ const especialidadController = {
 
       await especialidad.update({ is_active: false });
 
+      // Para la desactivación, puedes optar por devolver un DTO simple o un mensaje con los IDs afectados
       res.json({
         success: true,
-        message: 'Especialidad desactivada exitosamente'
+        message: 'Especialidad desactivada exitosamente',
+        data: {
+          id: especialidad.id,
+          is_active: false
+        }
       });
 
     } catch (error) {
@@ -210,4 +205,4 @@ const especialidadController = {
   }
 };
 
-module.exports = especialidadController; 
+module.exports = especialidadController;

@@ -1,4 +1,10 @@
 const { Disponibilidad, User, Especialidad, Appointment } = require('../models');
+const { Op } = require('sequelize'); // Importa Op para operaciones de Sequelize
+
+// Importa los DTOs de salida
+const DisponibilidadOutputDto = require('../dtos/disponibilidad-dto'); // Asegúrate de la ruta correcta
+const DentistOutputDto = require('../dtos/dentist-dto'); // Solo si lo necesitas para un caso particular, pero DisponibilidadOutputDto ya lo incluye
+const EspecialidadOutputDto = require('../dtos/especialidad-dto'); // Sólo si lo necesitas para un caso particular, pero DisponibilidadOutputDto ya lo incluye
 
 const disponibilidadController = {
   // Obtener todas las disponibilidades activas
@@ -23,22 +29,10 @@ const disponibilidadController = {
         order: [['date', 'ASC'], ['start_time', 'ASC']]
       });
 
+      // Usa el método estático fromList del DTO de Disponibilidad
       res.json({
         success: true,
-        data: disponibilidades.map(disponibilidad => ({
-          id: disponibilidad.id,
-          date: disponibilidad.date,
-          start_time: disponibilidad.start_time,
-          end_time: disponibilidad.end_time,
-          dentist: {
-            id: disponibilidad.dentist.id,
-            name: disponibilidad.dentist.name
-          },
-          especialidad: {
-            id: disponibilidad.especialidad.id,
-            name: disponibilidad.especialidad.name
-          }
-        }))
+        data: DisponibilidadOutputDto.fromList(disponibilidades)
       });
 
     } catch (error) {
@@ -56,9 +50,9 @@ const disponibilidadController = {
       const { especialidad_id } = req.params;
       const { date } = req.query; // Fecha opcional para filtrar
 
-      const whereClause = { 
+      const whereClause = {
         especialidad_id,
-        is_active: true 
+        is_active: true
       };
 
       if (date) {
@@ -84,22 +78,10 @@ const disponibilidadController = {
         order: [['date', 'ASC'], ['start_time', 'ASC']]
       });
 
+      // Usa el método estático fromList del DTO de Disponibilidad
       res.json({
         success: true,
-        data: disponibilidades.map(disponibilidad => ({
-          id: disponibilidad.id,
-          date: disponibilidad.date,
-          start_time: disponibilidad.start_time,
-          end_time: disponibilidad.end_time,
-          dentist: {
-            id: disponibilidad.dentist.id,
-            name: disponibilidad.dentist.name
-          },
-          especialidad: {
-            id: disponibilidad.especialidad.id,
-            name: disponibilidad.especialidad.name
-          }
-        }))
+        data: DisponibilidadOutputDto.fromList(disponibilidades)
       });
 
     } catch (error) {
@@ -117,9 +99,9 @@ const disponibilidadController = {
       const { dentist_id } = req.params;
       const { date } = req.query; // Fecha opcional para filtrar
 
-      const whereClause = { 
+      const whereClause = {
         dentist_id,
-        is_active: true 
+        is_active: true
       };
 
       if (date) {
@@ -145,22 +127,10 @@ const disponibilidadController = {
         order: [['date', 'ASC'], ['start_time', 'ASC']]
       });
 
+      // Usa el método estático fromList del DTO de Disponibilidad
       res.json({
         success: true,
-        data: disponibilidades.map(disponibilidad => ({
-          id: disponibilidad.id,
-          date: disponibilidad.date,
-          start_time: disponibilidad.start_time,
-          end_time: disponibilidad.end_time,
-          dentist: {
-            id: disponibilidad.dentist.id,
-            name: disponibilidad.dentist.name
-          },
-          especialidad: {
-            id: disponibilidad.especialidad.id,
-            name: disponibilidad.especialidad.name
-          }
-        }))
+        data: DisponibilidadOutputDto.fromList(disponibilidades)
       });
 
     } catch (error) {
@@ -202,22 +172,10 @@ const disponibilidadController = {
         });
       }
 
+      // Usa el constructor del DTO de Disponibilidad
       res.json({
         success: true,
-        data: {
-          id: disponibilidad.id,
-          date: disponibilidad.date,
-          start_time: disponibilidad.start_time,
-          end_time: disponibilidad.end_time,
-          dentist: {
-            id: disponibilidad.dentist.id,
-            name: disponibilidad.dentist.name
-          },
-          especialidad: {
-            id: disponibilidad.especialidad.id,
-            name: disponibilidad.especialidad.name
-          }
-        }
+        data: new DisponibilidadOutputDto(disponibilidad)
       });
 
     } catch (error) {
@@ -234,40 +192,35 @@ const disponibilidadController = {
     try {
       const { dentist_id, especialidad_id, date, start_time, end_time } = req.body;
 
-      // Validaciones básicas
+      // Aquí deberías integrar un DTO de entrada (Joi schema) para validar req.body
+      // Ejemplo (comentado para no introducir Joi aquí directamente sin su schema):
+      /*
+      const { error, value } = CreateDisponibilidadInputSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({
+          success: false,
+          message: 'Error de validación',
+          errors: error.details.map(d => ({ field: d.context.key, message: d.message }))
+        });
+      }
+      const { dentist_id, especialidad_id, date, start_time, end_time } = value;
+      */
+
+      // Validaciones básicas (se pueden mover a un Input DTO)
       if (!dentist_id) {
-        return res.status(400).json({
-          success: false,
-          message: 'El dentista es requerido'
-        });
+        return res.status(400).json({ success: false, message: 'El dentista es requerido' });
       }
-
       if (!especialidad_id) {
-        return res.status(400).json({
-          success: false,
-          message: 'La especialidad es requerida'
-        });
+        return res.status(400).json({ success: false, message: 'La especialidad es requerida' });
       }
-
       if (!date) {
-        return res.status(400).json({
-          success: false,
-          message: 'La fecha es requerida'
-        });
+        return res.status(400).json({ success: false, message: 'La fecha es requerida' });
       }
-
       if (!start_time || !end_time) {
-        return res.status(400).json({
-          success: false,
-          message: 'La hora de inicio y fin son requeridas'
-        });
+        return res.status(400).json({ success: false, message: 'La hora de inicio y fin son requeridas' });
       }
-
       if (start_time >= end_time) {
-        return res.status(400).json({
-          success: false,
-          message: 'La hora de inicio debe ser menor que la hora de fin'
-        });
+        return res.status(400).json({ success: false, message: 'La hora de inicio debe ser menor que la hora de fin' });
       }
 
       // Verificar que la fecha no sea en el pasado
@@ -312,13 +265,13 @@ const disponibilidadController = {
           dentist_id,
           date,
           is_active: true,
-          [require('sequelize').Op.or]: [
+          [Op.or]: [ // Usar Op directamente
             {
               start_time: {
-                [require('sequelize').Op.lt]: end_time
+                [Op.lt]: end_time
               },
               end_time: {
-                [require('sequelize').Op.gt]: start_time
+                [Op.gt]: start_time
               }
             }
           ]
@@ -342,23 +295,20 @@ const disponibilidadController = {
         is_active: true
       });
 
+      // Para formatear la respuesta, podemos cargar las relaciones (dentist y especialidad)
+      // para que el DTO pueda usarlas. Esto puede requerir un segundo fetch o una opción de `returning: true` en algunos ORMs.
+      // O podemos simplemente pasar los objetos 'dentist' y 'especialidad' que ya recuperamos.
+      const fullDisponibilidad = await Disponibilidad.findByPk(disponibilidad.id, {
+          include: [
+              { model: User, as: 'dentist', attributes: ['id', 'name'] },
+              { model: Especialidad, as: 'especialidad', attributes: ['id', 'name'] }
+          ]
+      });
+
       res.status(201).json({
         success: true,
         message: 'Disponibilidad creada exitosamente',
-        data: {
-          id: disponibilidad.id,
-          date: disponibilidad.date,
-          start_time: disponibilidad.start_time,
-          end_time: disponibilidad.end_time,
-          dentist: {
-            id: dentist.id,
-            name: dentist.name
-          },
-          especialidad: {
-            id: especialidad.id,
-            name: especialidad.name
-          }
-        }
+        data: new DisponibilidadOutputDto(fullDisponibilidad) // Usa el DTO aquí
       });
 
     } catch (error) {
@@ -376,40 +326,23 @@ const disponibilidadController = {
       const { id } = req.params;
       const { dentist_id, especialidad_id, date, start_time, end_time } = req.body;
 
+      // Aquí deberías integrar un DTO de entrada (Joi schema) para validar req.body
+
       // Validaciones básicas
       if (!dentist_id) {
-        return res.status(400).json({
-          success: false,
-          message: 'El dentista es requerido'
-        });
+        return res.status(400).json({ success: false, message: 'El dentista es requerido' });
       }
-
       if (!especialidad_id) {
-        return res.status(400).json({
-          success: false,
-          message: 'La especialidad es requerida'
-        });
+        return res.status(400).json({ success: false, message: 'La especialidad es requerida' });
       }
-
       if (!date) {
-        return res.status(400).json({
-          success: false,
-          message: 'La fecha es requerida'
-        });
+        return res.status(400).json({ success: false, message: 'La fecha es requerida' });
       }
-
       if (!start_time || !end_time) {
-        return res.status(400).json({
-          success: false,
-          message: 'La hora de inicio y fin son requeridas'
-        });
+        return res.status(400).json({ success: false, message: 'La hora de inicio y fin son requeridas' });
       }
-
       if (start_time >= end_time) {
-        return res.status(400).json({
-          success: false,
-          message: 'La hora de inicio debe ser menor que la hora de fin'
-        });
+        return res.status(400).json({ success: false, message: 'La hora de inicio debe ser menor que la hora de fin' });
       }
 
       // Buscar la disponibilidad
@@ -454,14 +387,14 @@ const disponibilidadController = {
           dentist_id,
           date,
           is_active: true,
-          id: { [require('sequelize').Op.ne]: id },
-          [require('sequelize').Op.or]: [
+          id: { [Op.ne]: id }, // Usar Op directamente
+          [Op.or]: [ // Usar Op directamente
             {
               start_time: {
-                [require('sequelize').Op.lt]: end_time
+                [Op.lt]: end_time
               },
               end_time: {
-                [require('sequelize').Op.gt]: start_time
+                [Op.gt]: start_time
               }
             }
           ]
@@ -484,23 +417,18 @@ const disponibilidadController = {
         end_time
       });
 
+      // Para formatear la respuesta, necesitamos cargar las relaciones después de la actualización
+      const updatedDisponibilidad = await Disponibilidad.findByPk(disponibilidad.id, {
+          include: [
+              { model: User, as: 'dentist', attributes: ['id', 'name'] },
+              { model: Especialidad, as: 'especialidad', attributes: ['id', 'name'] }
+          ]
+      });
+
       res.json({
         success: true,
         message: 'Disponibilidad actualizada exitosamente',
-        data: {
-          id: disponibilidad.id,
-          date: disponibilidad.date,
-          start_time: disponibilidad.start_time,
-          end_time: disponibilidad.end_time,
-          dentist: {
-            id: dentist.id,
-            name: dentist.name
-          },
-          especialidad: {
-            id: especialidad.id,
-            name: especialidad.name
-          }
-        }
+        data: new DisponibilidadOutputDto(updatedDisponibilidad) // Usa el DTO aquí
       });
 
     } catch (error) {
@@ -545,9 +473,14 @@ const disponibilidadController = {
 
       await disponibilidad.update({ is_active: false });
 
+      // Opcional: Podrías devolver el DTO de la disponibilidad actualizada si lo necesitaras en el frontend
       res.json({
         success: true,
-        message: 'Disponibilidad desactivada exitosamente'
+        message: 'Disponibilidad desactivada exitosamente',
+        data: {
+            id: disponibilidad.id,
+            is_active: false
+        }
       });
 
     } catch (error) {
@@ -560,4 +493,4 @@ const disponibilidadController = {
   }
 };
 
-module.exports = disponibilidadController; 
+module.exports = disponibilidadController;
