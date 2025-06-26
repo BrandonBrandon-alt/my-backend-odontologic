@@ -39,6 +39,7 @@ async function verifyRecaptcha(token) {
         return { success: false };
     }
 }
+
 const register = async (req, res) => {
     try {
 
@@ -348,4 +349,5 @@ module.exports = {
     verifyResetCode,
     getRefreshTokens,
     clearRefreshTokens,
+    verifyRecaptcha
 }; 

@@ -52,8 +52,10 @@ const createGuestAppointmentSchema = Joi.object({
     .allow(null, '')
     .messages({
       'string.max': 'Las notas no pueden exceder 500 caracteres'
-    })
+    }),
+    captchaToken: Joi.string().optional(), // ESTA LÍNEA DEBE ESTAR
 });
+
 
 module.exports = createGuestAppointmentSchema;
  

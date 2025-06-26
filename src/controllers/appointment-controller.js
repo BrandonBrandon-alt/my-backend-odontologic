@@ -3,16 +3,29 @@ const { createGuestAppointmentSchema, createUserAppointmentSchema, updateAppoint
 const { validateAppointmentCreation, ValidationError } = require('../utils/appointment-validations');
 const { sendAppointmentConfirmationEmail } = require('../utils/mailer');
 const { verifyConfirmationToken } = require('../utils/confirmation-token');
+const { verifyRecaptcha} = require('./auth-controller')
+
 
 const appointmentController = {
+  
+
+
+  
   // Crear cita como paciente invitado (lógica atómica)
   async createGuestAppointment(req, res) {
     const t = await Appointment.sequelize.transaction();
-
     try {
+
+      const { captchaToken } = req.body;
+        const recaptchaResult = await verifyRecaptcha(captchaToken);
+        if (!recaptchaResult) {
+            return res.status(400).json({ error: "Verificación de reCAPTCHA fallida. Intenta de nuevo." });
+        }
+        console.log("Respuesta de Google reCAPTCHA:", recaptchaResult);
       // 1. Validar el payload combinado (paciente + cita)
       const { error, value } = createGuestAppointmentSchema.validate(req.body);
       if (error) {
+        console.warn('Intento fallido de agendar cita (validación Joi):', error.details.map(detail => detail.message));
         return res.status(400).json({
           success: false,
           message: 'Datos de entrada inválidos',
@@ -21,6 +34,16 @@ const appointmentController = {
       }
 
       const { guest_patient, disponibilidad_id, service_type_id, preferred_date, notes } = value;
+
+      // 1.1 Validar formato de teléfono (simple regex, puedes ajustar a tu país)
+      const phoneRegex = /^\+?\d{7,15}$/;
+      if (!phoneRegex.test(guest_patient.phone)) {
+        console.warn('Intento fallido de agendar cita (teléfono inválido):', guest_patient.phone);
+        return res.status(400).json({
+          success: false,
+          message: 'El teléfono proporcionado no es válido. Debe tener entre 7 y 15 dígitos y puede incluir +.'
+        });
+      }
 
       // 2. Buscar o crear al paciente invitado dentro de la transacción
       let patient = await GuestPatient.findOne({
@@ -36,15 +59,36 @@ const appointmentController = {
           is_active: true
         }, { transaction: t });
       } else {
-        // Opcional: Actualizar datos si el paciente ya existía
+        // Si el paciente está inactivo, lo reactivamos
+        if (!patient.is_active) {
+          patient.is_active = true;
+        }
+        // Actualizar datos si el paciente ya existía
         patient.name = guest_patient.name;
         patient.phone = guest_patient.phone;
         await patient.save({ transaction: t });
       }
 
+      // 2.1 Limitar máximo 3 citas pendientes/confirmadas por paciente invitado
+      const activeAppointmentsCount = await Appointment.count({
+        where: {
+          guest_patient_id: patient.id,
+          status: ['pending', 'confirmed']
+        },
+        transaction: t
+      });
+      if (activeAppointmentsCount >= 3) {
+        console.warn('Intento fallido de agendar cita (límite de citas activas alcanzado):', patient.email);
+        return res.status(429).json({
+          success: false,
+          message: 'Has alcanzado el límite de 3 citas activas (pendientes o confirmadas). Por favor, completa o cancela alguna antes de agendar otra.'
+        });
+      }
+
       // 3. Validar que la cita no se agende en el pasado (comparando strings)
       const today = new Date().toISOString().split('T')[0];
       if (preferred_date < today) {
+        console.warn('Intento fallido de agendar cita (fecha pasada):', preferred_date);
         return res.status(400).json({
           success: false,
           message: 'No se puede agendar una cita en una fecha pasada.'
@@ -61,6 +105,7 @@ const appointmentController = {
       });
 
       if (!disponibilidad) {
+        console.warn('Intento fallido de agendar cita (disponibilidad no encontrada):', disponibilidad_id);
         return res.status(404).json({ success: false, message: 'Disponibilidad no encontrada' });
       }
 
@@ -70,11 +115,13 @@ const appointmentController = {
       });
 
       if (existingAppointment) {
+        console.warn('Intento fallido de agendar cita (horario ya no disponible):', disponibilidad_id);
         return res.status(409).json({ success: false, message: 'Este horario ya no está disponible.' });
       }
 
       const expectedDate = new Date(disponibilidad.date).toISOString().split('T')[0];
       if (expectedDate !== preferred_date) {
+        console.warn('Intento fallido de agendar cita (fecha no coincide con disponibilidad):', preferred_date, expectedDate);
         return res.status(400).json({
           success: false,
           message: `La fecha proporcionada (${preferred_date}) no coincide con la fecha del horario seleccionado (${expectedDate}).`
@@ -84,6 +131,7 @@ const appointmentController = {
       // 5. Validar el tipo de servicio y la duración
       const serviceType = await ServiceType.findByPk(service_type_id, { transaction: t });
       if (!serviceType) {
+        console.warn('Intento fallido de agendar cita (tipo de servicio no encontrado):', service_type_id);
         return res.status(404).json({ success: false, message: 'Tipo de servicio no encontrado' });
       }
 
@@ -92,11 +140,30 @@ const appointmentController = {
       const slotDuration = (endTime - startTime) / (1000 * 60);
 
       if (serviceType.duration > slotDuration) {
+        console.warn('Intento fallido de agendar cita (servicio requiere más tiempo que el slot):', serviceType.duration, slotDuration);
         return res.status(400).json({ success: false, message: `El servicio requiere ${serviceType.duration} min, pero el espacio es de ${slotDuration} min.` });
       }
 
-      // 6. Crear la cita
+      // 5.1 Prevenir doble booking por paciente invitado
       const horaCita = disponibilidad.start_time.split(':').slice(0, 2).join(':');
+      const conflictingAppointment = await Appointment.findOne({
+        where: {
+          guest_patient_id: patient.id,
+          preferred_date,
+          preferred_time: horaCita,
+          status: ['pending', 'confirmed']
+        },
+        transaction: t
+      });
+      if (conflictingAppointment) {
+        console.warn('Intento fallido de agendar cita (doble booking):', patient.email, preferred_date, horaCita);
+        return res.status(409).json({
+          success: false,
+          message: 'Ya tienes una cita pendiente o confirmada para ese horario.'
+        });
+      }
+
+      // 6. Crear la cita
       const appointment = await Appointment.create({
         guest_patient_id: patient.id,
         disponibilidad_id,
@@ -110,11 +177,6 @@ const appointmentController = {
 
       // 7. Si todo es correcto, confirmar la transacción
       await t.commit();
-     
-
-
-      // Preparar los datos completos para el correo de confirmación
-
 
       // 8. Enviar correo de confirmación (fuera de la transacción)
       const emailDetails = {
@@ -142,8 +204,8 @@ const appointmentController = {
       // 9. Enviar respuesta exitosa
       res.status(201).json({
         success: true,
-        message: 'Cita creada exitosamente',
-        data: { id: appointment.id /* ... más datos si son necesarios ... */ }
+        message: 'Cita creada exitosamente. Recuerda confirmar tu cita desde el correo que te enviamos.',
+        data: { id: appointment.id }
       });
 
     } catch (error) {
