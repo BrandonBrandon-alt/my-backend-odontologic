@@ -1,6 +1,7 @@
 require('dotenv').config(); // Asegúrate de que esto se ejecute al inicio de tu aplicación para cargar las variables de entorno
 const e = require('cors');
 const nodemailer = require('nodemailer');
+const { generateConfirmationUrl } = require('./confirmation-token');
 
 // Define los colores de tu paleta directamente como constantes para usar en el HTML inline
 // Esto asegura la compatibilidad con la mayoría de los clientes de correo.
@@ -130,8 +131,9 @@ async function sendPasswordResetEmail(email, code) {
  * @param {string} appointmentDetails.appointmentStartTime - Hora de inicio de la cita (ej. "HH:MM").
  * @param {string} appointmentDetails.appointmentEndTime - Hora de fin de la cita (ej. "HH:MM").
  * @param {string} appointmentDetails.appointmentId - ID único de la cita.
+ * @param {string} baseUrl - URL base de la aplicación para generar el enlace de confirmación.
  */
-async function sendAppointmentConfirmationEmail(to, appointmentDetails) {
+async function sendAppointmentConfirmationEmail(to, appointmentDetails, baseUrl = process.env.BASE_URL || 'http://localhost:3000') {
   const {
     patientName,
     patientEmail,
@@ -148,6 +150,9 @@ async function sendAppointmentConfirmationEmail(to, appointmentDetails) {
     appointmentEndTime,
     appointmentId
   } = appointmentDetails;
+
+  // Generar URL de confirmación
+  const confirmationUrl = generateConfirmationUrl(appointmentId, patientEmail, baseUrl);
 
   // Formatear la fecha y hora para el correo
   const formattedDate = new Date(appointmentDate).toLocaleDateString('es-CO', {
@@ -168,7 +173,7 @@ async function sendAppointmentConfirmationEmail(to, appointmentDetails) {
   };
 
   const content = `
-    <h2 style="color: ${COLORS.primaryDarker}; font-size: 20px; margin-top: 0;">¡Cita Confirmada, ${patientName}!</h2>
+    <h2 style="color: ${COLORS.primaryDarker}; font-size: 20px; margin-top: 0;">¡Cita Confirmada!</h2>
     <p style="font-size: 14px; line-height: 1.6; color: ${COLORS.textDark};">Tu cita en Odontologic ha sido confirmada exitosamente. Aquí están los detalles:</p>
 
     <div style="background-color: ${COLORS.backgroundLight}; border-left: 4px solid ${COLORS.primary}; padding: 15px; border-radius: 5px; margin: 20px 0;">
@@ -199,6 +204,20 @@ async function sendAppointmentConfirmationEmail(to, appointmentDetails) {
       </ul>
     </div>
 
+    <!-- Botón de Confirmación -->
+    <div style="margin-top: 30px; text-align: center;">
+      <a href="${confirmationUrl}" style="display: inline-block; background-color: ${COLORS.success}; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+        ✅ Confirmar Mi Cita
+      </a>
+    </div>
+
+    <div style="margin-top: 20px; text-align: center;">
+      <p style="font-size: 12px; color: #666; margin: 0;">
+        Si el botón no funciona, puedes copiar y pegar este enlace en tu navegador:<br>
+        <a href="${confirmationUrl}" style="color: ${COLORS.primary}; word-break: break-all;">${confirmationUrl}</a>
+      </p>
+    </div>
+
     <p style="font-size: 14px; line-height: 1.6; color: ${COLORS.textDark}; margin-top: 25px;">¡Esperamos verte pronto!</p>
     <p style="font-size: 14px; line-height: 1.6; color: ${COLORS.primaryDarker}; font-weight: bold;">Equipo de Odontologic</p>
   `;
@@ -207,7 +226,7 @@ async function sendAppointmentConfirmationEmail(to, appointmentDetails) {
   await sendEmail(
     to,
     `Odontologic: ¡Tu Cita #${appointmentId} ha sido Confirmada!`,
-    `Hola ${patientName}, tu cita con el Dr. ${doctorName} para ${serviceTypeName} el ${formattedDate} a las ${formattedStartTime} ha sido confirmada.`,
+    `Hola ${patientName}, tu cita con el Dr. ${doctorName} para ${serviceTypeName} el ${formattedDate} a las ${formattedStartTime} ha sido confirmada. Para confirmar tu cita, visita: ${confirmationUrl}`,
     html
   );
 }

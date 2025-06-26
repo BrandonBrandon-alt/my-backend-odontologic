@@ -2,6 +2,7 @@ const { Appointment, GuestPatient, User, Disponibilidad, ServiceType, Especialid
 const { createGuestAppointmentSchema, createUserAppointmentSchema, updateAppointmentStatusSchema } = require('../dtos');
 const { validateAppointmentCreation, ValidationError } = require('../utils/appointment-validations');
 const { sendAppointmentConfirmationEmail } = require('../utils/mailer');
+const { verifyConfirmationToken } = require('../utils/confirmation-token');
 
 const appointmentController = {
   // Crear cita como paciente invitado (lógica atómica)
@@ -117,9 +118,10 @@ const appointmentController = {
 
       // 8. Enviar correo de confirmación (fuera de la transacción)
       const emailDetails = {
-        patientEmail: patient.email, // CORREGIDO: Usar 'patient' en lugar de 'guestPatient'
-        patientPhone: patient.phone, // CORREGIDO: Usar 'patient' en lugar de 'guestPatient'
-        patientIdNumber: guest_patient.id_number || null, // Del payload de entrada, ya que puede no estar en el modelo patient si es invitado
+        patientName: patient.name,
+        patientEmail: patient.email,
+        patientPhone: patient.phone,
+        patientIdNumber: guest_patient.id_number || null,
         patientNotes: appointment.notes || null,
         doctorName: disponibilidad.dentist.name,
         specialtyName: disponibilidad.especialidad.name,
@@ -132,7 +134,7 @@ const appointmentController = {
         appointmentId: appointment.id
       };
       try {
-        await sendAppointmentConfirmationEmail(patient.email, emailDetails);
+        await sendAppointmentConfirmationEmail(patient.email, emailDetails, process.env.BASE_URL || 'http://localhost:3000');
       } catch (emailError) {
         console.error('Error al enviar correo:', emailError);
       }
@@ -241,10 +243,12 @@ const appointmentController = {
         include: [
           {
             model: Disponibilidad,
-            include: [{ model: Especialidad }]
+            as: 'disponibilidad',
+            include: [{ model: Especialidad, as: 'especialidad' }]
           },
           {
-            model: ServiceType
+            model: ServiceType,
+            as: 'serviceType'
           }
         ],
         order: [['createdAt', 'DESC']]
@@ -296,18 +300,22 @@ const appointmentController = {
         include: [
           {
             model: GuestPatient,
+            as: 'guestPatient',
             attributes: ['id', 'name', 'phone', 'email']
           },
           {
             model: User,
+            as: 'user',
             attributes: ['id', 'name', 'email']
           },
           {
             model: Disponibilidad,
-            include: [{ model: Especialidad }]
+            as: 'disponibilidad',
+            include: [{ model: Especialidad, as: 'especialidad' }]
           },
           {
-            model: ServiceType
+            model: ServiceType,
+            as: 'serviceType'
           }
         ],
         order: [['createdAt', 'DESC']]
@@ -334,18 +342,22 @@ const appointmentController = {
         include: [
           {
             model: GuestPatient,
+            as: 'guestPatient',
             attributes: ['id', 'name', 'phone', 'email']
           },
           {
             model: User,
+            as: 'user',
             attributes: ['id', 'name', 'email']
           },
           {
             model: Disponibilidad,
-            include: [{ model: Especialidad }]
+            as: 'disponibilidad',
+            include: [{ model: Especialidad, as: 'especialidad' }]
           },
           {
-            model: ServiceType
+            model: ServiceType,
+            as: 'serviceType'
           }
         ]
       });
@@ -404,6 +416,230 @@ const appointmentController = {
       });
     } catch (error) {
       console.error('Error al actualizar estado de cita:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error interno del servidor'
+      });
+    }
+  },
+
+  // Confirmar cita mediante email (endpoint público)
+  async confirmAppointmentByEmail(req, res) {
+    try {
+      const { id } = req.params;
+      const { token, email } = req.query;
+
+      // Validar parámetros requeridos
+      if (!token || !email) {
+        return res.status(400).json({
+          success: false,
+          message: 'Token y email son requeridos para confirmar la cita'
+        });
+      }
+
+      // Buscar la cita
+      const appointment = await Appointment.findByPk(id, {
+        include: [
+          {
+            model: GuestPatient,
+            as: 'guestPatient',
+            attributes: ['id', 'name', 'phone', 'email']
+          },
+          {
+            model: User,
+            as: 'user',
+            attributes: ['id', 'name', 'email']
+          },
+          {
+            model: Disponibilidad,
+            as: 'disponibilidad',
+            include: [{ model: Especialidad, as: 'especialidad' }]
+          },
+          {
+            model: ServiceType,
+            as: 'serviceType'
+          }
+        ]
+      });
+
+      if (!appointment) {
+        return res.status(404).json({
+          success: false,
+          message: 'Cita no encontrada'
+        });
+      }
+
+      // Verificar que el email coincida con el paciente de la cita
+      const patientEmail = appointment.guestPatient?.email || appointment.user?.email;
+      if (patientEmail !== email) {
+        return res.status(403).json({
+          success: false,
+          message: 'No tienes permisos para confirmar esta cita'
+        });
+      }
+
+      // Verificar el token (aquí podrías implementar una verificación más robusta)
+      if (!verifyConfirmationToken(token, id, email)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Token de confirmación inválido o expirado'
+        });
+      }
+
+      // Verificar que la cita esté en estado pendiente
+      if (appointment.status !== 'pending') {
+        return res.status(400).json({
+          success: false,
+          message: `La cita ya no está pendiente. Estado actual: ${appointment.status}`
+        });
+      }
+
+      // Confirmar la cita
+      await appointment.update({ status: 'confirmed' });
+
+      // Preparar datos para el correo de confirmación exitosa
+      const patientName = appointment.guestPatient?.name || appointment.user?.name;
+      const doctorName = appointment.disponibilidad?.dentist?.name || 'Doctor';
+      const specialtyName = appointment.disponibilidad?.especialidad?.name || 'Especialidad';
+      const serviceTypeName = appointment.serviceType?.name || 'Servicio';
+
+      // Enviar correo de confirmación exitosa
+      try {
+        await sendAppointmentConfirmationEmail(patientEmail, {
+          patientName,
+          patientEmail,
+          patientPhone: appointment.guestPatient?.phone || appointment.user?.phone || '',
+          patientIdNumber: null,
+          patientNotes: appointment.notes,
+          doctorName,
+          specialtyName,
+          serviceTypeName,
+          serviceTypeDescription: appointment.serviceType?.description || '',
+          serviceTypeDuration: appointment.serviceType?.duration || 0,
+          appointmentDate: appointment.preferred_date,
+          appointmentStartTime: appointment.preferred_time,
+          appointmentEndTime: appointment.disponibilidad?.end_time || '',
+          appointmentId: appointment.id
+        }, process.env.BASE_URL || 'http://localhost:3000');
+      } catch (emailError) {
+        console.error('Error al enviar correo de confirmación exitosa:', emailError);
+        // No fallamos la operación si el correo falla
+      }
+
+      // Retornar respuesta exitosa con HTML para mostrar en el navegador
+      const htmlResponse = `
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Cita Confirmada - Odontologic</title>
+          <style>
+            body {
+              font-family: 'Inter', Arial, sans-serif;
+              background-color: #F5F5F5;
+              margin: 0;
+              padding: 20px;
+              color: #004D40;
+            }
+            .container {
+              max-width: 600px;
+              margin: 0 auto;
+              background-color: #ffffff;
+              border-radius: 8px;
+              overflow: hidden;
+              box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            }
+            .header {
+              background-color: #009688;
+              padding: 20px;
+              text-align: center;
+              border-radius: 8px 8px 0 0;
+            }
+            .header h1 {
+              color: #ffffff;
+              font-size: 24px;
+              margin: 0;
+            }
+            .content {
+              padding: 30px;
+              text-align: center;
+            }
+            .success-icon {
+              font-size: 64px;
+              color: #4caf50;
+              margin-bottom: 20px;
+            }
+            .success-title {
+              color: #004D40;
+              font-size: 24px;
+              margin-bottom: 15px;
+            }
+            .success-message {
+              font-size: 16px;
+              line-height: 1.6;
+              color: #004D40;
+              margin-bottom: 30px;
+            }
+            .appointment-details {
+              background-color: #F5F5F5;
+              border-left: 4px solid #009688;
+              padding: 20px;
+              border-radius: 5px;
+              margin: 20px 0;
+              text-align: left;
+            }
+            .footer {
+              background-color: #004D40;
+              padding: 20px;
+              text-align: center;
+              border-radius: 0 0 8px 8px;
+            }
+            .footer p {
+              color: #ffffff;
+              font-size: 12px;
+              margin: 0;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Odontologic</h1>
+            </div>
+            <div class="content">
+              <div class="success-icon">✅</div>
+              <h2 class="success-title">¡Cita Confirmada Exitosamente!</h2>
+              <p class="success-message">
+                Tu cita ha sido confirmada. Hemos enviado un correo de confirmación a tu dirección de email.
+              </p>
+              <div class="appointment-details">
+                <h3>Detalles de la Cita #${appointment.id}</h3>
+                <p><strong>Paciente:</strong> ${patientName}</p>
+                <p><strong>Doctor:</strong> ${doctorName} (${specialtyName})</p>
+                <p><strong>Servicio:</strong> ${serviceTypeName}</p>
+                <p><strong>Fecha:</strong> ${new Date(appointment.preferred_date).toLocaleDateString('es-CO', {
+                  weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+                })}</p>
+                <p><strong>Hora:</strong> ${appointment.preferred_time}</p>
+              </div>
+              <p style="font-size: 14px; color: #666;">
+                Puedes cerrar esta ventana. Recibirás un correo con todos los detalles de tu cita.
+              </p>
+            </div>
+            <div class="footer">
+              <p>&copy; ${new Date().getFullYear()} Odontologic. Todos los derechos reservados.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      res.setHeader('Content-Type', 'text/html');
+      res.send(htmlResponse);
+
+    } catch (error) {
+      console.error('Error al confirmar cita por email:', error);
       res.status(500).json({
         success: false,
         message: 'Error interno del servidor'

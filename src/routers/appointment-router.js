@@ -6,6 +6,9 @@ const { authenticateToken } = require('../middleware/auth-middleware');
 // Rutas públicas (sin autenticación)
 router.post('/guest', appointmentController.createGuestAppointment);
 
+// Ruta para confirmar cita mediante email (pública)
+router.get('/confirm/:id', appointmentController.confirmAppointmentByEmail);
+
 // Rutas protegidas (requieren autenticación)
 router.use(authenticateToken);
 
