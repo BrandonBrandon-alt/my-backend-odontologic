@@ -19,7 +19,7 @@ function generateCodeWithExpiration(bytes = 2, expiresInMinutes = 60) {
 }
 
 async function verifyRecaptcha(token) {
-    const secret = process.env.RECAPTCHA_SECRET_KEY ;
+    const secret = process.env.RECAPTCHA_SECRET_KEY;
     const url = "https://www.google.com/recaptcha/api/siteverify";
     try {
         const response = await axios.post(
@@ -40,15 +40,29 @@ async function verifyRecaptcha(token) {
     }
 }
 
+
+
 const register = async (req, res) => {
     try {
 
         const { captchaToken } = req.body;
+
+        // 1. Llama a tu función de verificación
         const recaptchaResult = await verifyRecaptcha(captchaToken);
-        if (!recaptchaResult) {
+
+        // 2. AÑADE ESTA VALIDACIÓN MEJORADA
+        if (!recaptchaResult || !recaptchaResult.success) {
+            // Si Google dice que la verificación falló (token inválido, etc.)
             return res.status(400).json({ error: "Verificación de reCAPTCHA fallida. Intenta de nuevo." });
         }
-        console.log("Respuesta de Google reCAPTCHA:", recaptchaResult);
+
+        if (recaptchaResult.score < 0.5) {
+            // Si el puntaje es muy bajo, es probablemente un bot. 0.5 es un umbral común.
+            console.warn(`Puntaje de reCAPTCHA bajo detectado: ${recaptchaResult.score}`);
+            return res.status(403).json({ error: "Actividad sospechosa detectada." });
+        }
+
+
 
         const { error } = createUserDTO.validate(req.body, { allowUnknown: true });
         if (error) {
@@ -110,11 +124,24 @@ const login = async (req, res) => {
     try {
 
         const { captchaToken } = req.body;
+
+        // 1. Llama a tu función de verificación
         const recaptchaResult = await verifyRecaptcha(captchaToken);
-        if (!recaptchaResult) {
+
+        // 2. AÑADE ESTA VALIDACIÓN MEJORADA
+        if (!recaptchaResult || !recaptchaResult.success) {
+            // Si Google dice que la verificación falló (token inválido, etc.)
             return res.status(400).json({ error: "Verificación de reCAPTCHA fallida. Intenta de nuevo." });
         }
-        console.log("Respuesta de Google reCAPTCHA:", recaptchaResult);
+
+        if (recaptchaResult.score < 0.5) {
+            // Si el puntaje es muy bajo, es probablemente un bot. 0.5 es un umbral común.
+            console.warn(`Puntaje de reCAPTCHA bajo detectado: ${recaptchaResult.score}`);
+            return res.status(403).json({ error: "Actividad sospechosa detectada." });
+        }
+
+
+
 
         const user = await User.findOne({ where: { email } });
         if (!user) {
