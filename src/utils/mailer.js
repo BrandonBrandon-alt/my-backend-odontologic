@@ -231,8 +231,57 @@ async function sendAppointmentConfirmationEmail(to, appointmentDetails, baseUrl 
   );
 }
 
+// ======================= EMAIL DE CONFIRMACIÓN DE CONTACTO =======================
+async function sendConfirmationEmail(userEmail, userName) {
+  const content = `
+    <h2 style="color: ${COLORS.primaryDarker}; font-size: 20px; margin-top: 0;">¡Gracias por contactarnos!</h2>
+    <p style="font-size: 14px; line-height: 1.6; color: ${COLORS.textDark};">Hola ${userName},</p>
+    <p style="font-size: 14px; line-height: 1.6; color: ${COLORS.textDark};">Hemos recibido tu mensaje y nos pondremos en contacto contigo pronto.</p>
+    <p style="font-size: 14px; line-height: 1.6; color: ${COLORS.textDark};">Mientras tanto, puedes visitar nuestra página web para más información.</p>
+    <br>
+    <p style="font-size: 14px; line-height: 1.6; color: ${COLORS.primaryDarker}; font-weight: bold;">Saludos,<br>Equipo de Odontologic</p>
+  `;
+  const html = getBaseEmailLayout(content);
+
+  await sendEmail(
+    userEmail,
+    'Gracias por contactarnos - Odontologic',
+    `Hola ${userName}, hemos recibido tu mensaje y nos pondremos en contacto contigo pronto.`,
+    html
+  );
+}
+
+// ======================= EMAIL DE NOTIFICACIÓN DE CONTACTO =======================
+async function sendNotificationEmail(contactMessage) {
+  const content = `
+    <h2 style="color: ${COLORS.error}; font-size: 20px; margin-top: 0;">Nuevo mensaje de contacto</h2>
+    <div style="background-color: ${COLORS.backgroundLight}; border-left: 4px solid ${COLORS.primary}; padding: 15px; border-radius: 5px; margin: 20px 0;">
+      <p style="font-size: 14px; margin: 5px 0;"><strong>De:</strong> <span style="color: ${COLORS.textDark};">${contactMessage.name}</span></p>
+      <p style="font-size: 14px; margin: 5px 0;"><strong>Email:</strong> <span style="color: ${COLORS.textDark};">${contactMessage.email}</span></p>
+      <p style="font-size: 14px; margin: 5px 0;"><strong>Teléfono:</strong> <span style="color: ${COLORS.textDark};">${contactMessage.phone || 'No proporcionado'}</span></p>
+      <p style="font-size: 14px; margin: 5px 0;"><strong>Asunto:</strong> <span style="color: ${COLORS.textDark};">${contactMessage.subject}</span></p>
+      <p style="font-size: 14px; margin: 5px 0;"><strong>Fecha:</strong> <span style="color: ${COLORS.textDark};">${new Date(contactMessage.createdAt).toLocaleString('es-CO')}</span></p>
+    </div>
+    
+    <div style="background-color: ${COLORS.backgroundDark}; padding: 15px; border-radius: 5px; margin: 20px 0;">
+      <h3 style="color: ${COLORS.textDark}; font-size: 16px; margin-top: 0; margin-bottom: 10px;">Mensaje:</h3>
+      <p style="font-size: 14px; line-height: 1.6; color: ${COLORS.textDark}; margin: 0;">${contactMessage.message}</p>
+    </div>
+  `;
+  const html = getBaseEmailLayout(content);
+
+  await sendEmail(
+    process.env.ADMIN_EMAIL || process.env.EMAIL_USER,
+    `Nuevo mensaje de contacto - ${contactMessage.subject}`,
+    `Nuevo mensaje de ${contactMessage.name} (${contactMessage.email}): ${contactMessage.message}`,
+    html
+  );
+}
+
 module.exports = {
   sendActivationEmail,
   sendPasswordResetEmail,
-  sendAppointmentConfirmationEmail // Exporta la nueva función
+  sendAppointmentConfirmationEmail,
+  sendConfirmationEmail,
+  sendNotificationEmail
 };
