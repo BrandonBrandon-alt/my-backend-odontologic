@@ -12,6 +12,7 @@ const appointmentRouter = require('./routers/appointment-router');
 const especialidadRouter = require('./routers/especialidad-router');
 const serviceTypeRouter = require('./routers/service-type-router');
 const disponibilidadRouter = require('./routers/disponibilidad-router');
+const contactRouter = require('./routers/contact-router');
 const app = express();
 
 // Configuración de CORS
@@ -29,6 +30,9 @@ app.use('/api/service-type', serviceTypeRouter); // GET /api/service-type/especi
 app.use('/api/disponibilidad', disponibilidadRouter); // GET /api/disponibilidad/especialidad/:id
 app.use('/api/guest-patient', guestPatientRouter); // POST /api/guest-patient
 app.use('/api/appointments', appointmentRouter); // POST /api/appointments/guest
+
+// Rutas de contacto
+app.use('/api/contact', contactRouter); // POST /api/contact/send-message
 
 // Rutas de autenticación y usuario
 app.use('/api', authRouter);

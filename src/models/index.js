@@ -21,6 +21,7 @@ const Especialidad = require('./especialidad-model')(sequelize);
 const Disponibilidad = require('./disponibilidad-model')(sequelize);
 const ServiceType = require('./service-type-model')(sequelize);
 const Appointment = require('./appointment-model')(sequelize);
+const ContactMessage = require('./contact-message-model')(sequelize);
 
 // --- Definición de Asociaciones ---
 
@@ -123,4 +124,5 @@ module.exports = {
   Disponibilidad,
   ServiceType,
   Appointment,
+  ContactMessage,
 };
