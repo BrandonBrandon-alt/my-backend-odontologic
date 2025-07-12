@@ -17,7 +17,7 @@ const app = express();
 // Configuración de CORS
 app.use(cors({
     // CAMBIAR A LA URL DONDE REALMENTE CORRE TU FRONTEND (Vite)
-    origin: 'http://localhost:5174', // <--- ¡CAMBIADO A 5173!
+    origin: 'http://localhost:5173', // <--- ¡CAMBIADO A 5173!
     credentials: true // Si necesitas enviar cookies o cabeceras de autorización
 }));
 
@@ -28,7 +28,7 @@ app.use('/api/especialidad', especialidadRouter); // GET /api/especialidad
 app.use('/api/service-type', serviceTypeRouter); // GET /api/service-type/especialidad/:id
 app.use('/api/disponibilidad', disponibilidadRouter); // GET /api/disponibilidad/especialidad/:id
 app.use('/api/guest-patient', guestPatientRouter); // POST /api/guest-patient
-app.use('/api/appointment', appointmentRouter); // POST /api/appointment/guest
+app.use('/api/appointments', appointmentRouter); // POST /api/appointments/guest
 
 // Rutas de autenticación y usuario
 app.use('/api', authRouter);
