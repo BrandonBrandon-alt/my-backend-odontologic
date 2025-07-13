@@ -6,7 +6,6 @@ const dentistsDto = Joi.object({
     name: Joi.string().min(1).max(100).required(),
     email: Joi.string().email().required(),
     phone: Joi.string().optional(),
-    address: Joi.string().optional(),
     role: Joi.string().valid('dentist').required(),
     status: Joi.string().valid('active', 'locked', 'inactive').required(),
 });
