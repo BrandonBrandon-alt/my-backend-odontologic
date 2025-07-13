@@ -226,10 +226,12 @@ const appointmentController = {
 
   // Crear cita como usuario registrado
   async createUserAppointment(req, res) {
+    const t = await Appointment.sequelize.transaction();
     try {
-      // Validar datos de entrada
+      // 1. Validar datos de entrada
       const { error, value } = createUserAppointmentSchema.validate(req.body);
       if (error) {
+        console.warn('Intento fallido de agendar cita (validación Joi):', error.details.map(detail => detail.message));
         return res.status(400).json({
           success: false,
           message: 'Datos de entrada inválidos',
@@ -237,70 +239,209 @@ const appointmentController = {
         });
       }
 
-      // Validar todos los aspectos de la cita
-      const { disponibilidad, serviceType } = await validateAppointmentCreation(
-        value.disponibilidad_id,
-        value.service_type_id,
-        value.preferred_date,
-        value.preferred_time
-      );
+      const { patient_id, disponibilidad_id, service_type_id, preferred_date, notes } = value;
 
-      // Crear la cita
-      const appointment = await Appointment.create({
-        user_id: req.user.id,
-        disponibilidad_id: value.disponibilidad_id,
-        service_type_id: value.service_type_id,
-        preferred_date: value.preferred_date,
-        preferred_time: value.preferred_time,
-        status: 'pending',
-        appointment_type: 'user',
-        notes: value.notes || null
-      });
-
-      res.status(201).json({
-        success: true,
-        message: 'Cita creada exitosamente',
-        data: {
-          id: appointment.id,
-          user: {
-            id: req.user.id,
-            name: req.user.name,
-            email: req.user.email
-          },
-          disponibilidad: {
-            id: disponibilidad.id,
-            date: disponibilidad.date,
-            start_time: disponibilidad.start_time,
-            end_time: disponibilidad.end_time,
-            especialidad: disponibilidad.especialidad.name
-          },
-          service_type: {
-            id: serviceType.id,
-            name: serviceType.name,
-            duration: serviceType.duration
-          },
-          preferred_date: appointment.preferred_date,
-          preferred_time: appointment.preferred_time,
-          status: appointment.status,
-          appointment_type: appointment.appointment_type,
-          notes: appointment.notes
-        }
-      });
-
-    } catch (error) {
-      console.error('Error al crear cita como usuario:', error);
-
-      // Manejar errores de validación específicos
-      if (error instanceof ValidationError) {
-        return res.status(error.statusCode).json({
+      // 2. Verificar que el paciente sea el usuario autenticado (seguridad)
+      if (patient_id !== req.user.id) {
+        console.warn('Intento fallido de agendar cita (autorización):', req.user.id, 'intentó crear cita para', patient_id);
+        return res.status(403).json({
           success: false,
-          message: error.message
+          error: 'No autorizado para crear citas para otros pacientes'
         });
       }
 
+      // 3. Verificar que el paciente existe
+      const patient = await User.findByPk(patient_id, { transaction: t });
+      if (!patient) {
+        console.warn('Intento fallido de agendar cita (paciente no encontrado):', patient_id);
+        return res.status(404).json({
+          success: false,
+          error: 'Paciente no encontrado'
+        });
+      }
+
+      // 4. Validar que la fecha sea futura
+      const today = new Date().toISOString().split('T')[0];
+      if (preferred_date <= today) {
+        console.warn('Intento fallido de agendar cita (fecha pasada):', preferred_date);
+        return res.status(400).json({
+          success: false,
+          error: 'La fecha debe ser futura'
+        });
+      }
+
+      // 5. Validar la disponibilidad
+      const disponibilidad = await Disponibilidad.findByPk(disponibilidad_id, {
+        include: [
+          { model: Especialidad, as: 'especialidad' },
+          { model: User, as: 'dentist', attributes: ['id', 'name'] }
+        ],
+        transaction: t
+      });
+
+      if (!disponibilidad) {
+        console.warn('Intento fallido de agendar cita (disponibilidad no encontrada):', disponibilidad_id);
+        return res.status(404).json({
+          success: false,
+          error: 'Disponibilidad no encontrada'
+        });
+      }
+
+      // 6. Verificar que la disponibilidad esté libre
+      const existingAppointment = await Appointment.findOne({
+        where: { disponibilidad_id },
+        transaction: t
+      });
+
+      if (existingAppointment) {
+        console.warn('Intento fallido de agendar cita (horario ya no disponible):', disponibilidad_id);
+        return res.status(400).json({
+          success: false,
+          error: 'La disponibilidad seleccionada no está disponible'
+        });
+      }
+
+      // 7. Verificar que la fecha coincida con la disponibilidad
+      const expectedDate = new Date(disponibilidad.date).toISOString().split('T')[0];
+      if (expectedDate !== preferred_date) {
+        console.warn('Intento fallido de agendar cita (fecha no coincide con disponibilidad):', preferred_date, expectedDate);
+        return res.status(400).json({
+          success: false,
+          error: `La fecha proporcionada (${preferred_date}) no coincide con la fecha del horario seleccionado (${expectedDate})`
+        });
+      }
+
+      // 8. Validar el tipo de servicio
+      const serviceType = await ServiceType.findByPk(service_type_id, { transaction: t });
+      if (!serviceType) {
+        console.warn('Intento fallido de agendar cita (tipo de servicio no encontrado):', service_type_id);
+        return res.status(404).json({
+          success: false,
+          error: 'Tipo de servicio no encontrado'
+        });
+      }
+
+      // 9. Verificar compatibilidad entre servicio y especialidad
+      if (serviceType.especialidad_id !== disponibilidad.especialidad_id) {
+        console.warn('Intento fallido de agendar cita (servicio no compatible con especialidad):', service_type_id, disponibilidad.especialidad_id);
+        return res.status(400).json({
+          success: false,
+          error: 'El tipo de servicio no corresponde a la especialidad de la disponibilidad'
+        });
+      }
+
+      // 10. Verificar duración del servicio vs slot disponible
+      const startTime = new Date(`1970-01-01T${disponibilidad.start_time}`);
+      const endTime = new Date(`1970-01-01T${disponibilidad.end_time}`);
+      const slotDuration = (endTime - startTime) / (1000 * 60);
+
+      if (serviceType.duration > slotDuration) {
+        console.warn('Intento fallido de agendar cita (servicio requiere más tiempo que el slot):', serviceType.duration, slotDuration);
+        return res.status(400).json({
+          success: false,
+          error: `El servicio requiere ${serviceType.duration} min, pero el espacio es de ${slotDuration} min`
+        });
+      }
+
+      // 11. Prevenir doble booking por paciente registrado
+      const horaCita = disponibilidad.start_time.split(':').slice(0, 2).join(':');
+      const conflictingAppointment = await Appointment.findOne({
+        where: {
+          user_id: patient_id,
+          preferred_date,
+          preferred_time: horaCita,
+          status: ['pending', 'confirmed']
+        },
+        transaction: t
+      });
+
+      if (conflictingAppointment) {
+        console.warn('Intento fallido de agendar cita (doble booking):', patient_id, preferred_date, horaCita);
+        return res.status(409).json({
+          success: false,
+          error: 'Ya tienes una cita pendiente o confirmada para ese horario'
+        });
+      }
+
+      // 12. Limitar máximo 5 citas activas por paciente registrado
+      const activeAppointmentsCount = await Appointment.count({
+        where: {
+          user_id: patient_id,
+          status: ['pending', 'confirmed']
+        },
+        transaction: t
+      });
+
+      if (activeAppointmentsCount >= 5) {
+        console.warn('Intento fallido de agendar cita (límite de citas activas alcanzado):', patient_id);
+        return res.status(429).json({
+          success: false,
+          error: 'Has alcanzado el límite de 5 citas activas (pendientes o confirmadas). Por favor, completa o cancela alguna antes de agendar otra'
+        });
+      }
+
+      // 13. Crear la cita
+      const appointment = await Appointment.create({
+        user_id: patient_id,
+        disponibilidad_id,
+        service_type_id,
+        preferred_date,
+        preferred_time: horaCita,
+        status: 'pending',
+        appointment_type: 'registered',
+        notes: notes || null
+      }, { transaction: t });
+
+      // 14. Confirmar la transacción
+      await t.commit();
+
+      // 15. Enviar correo de confirmación (fuera de la transacción)
+      const emailDetails = {
+        patientName: patient.name,
+        patientEmail: patient.email,
+        patientPhone: patient.phone || null,
+        patientIdNumber: patient.id_number || null,
+        patientNotes: appointment.notes || null,
+        doctorName: disponibilidad.dentist.name,
+        specialtyName: disponibilidad.especialidad.name,
+        serviceTypeName: serviceType.name,
+        serviceTypeDescription: serviceType.description || '',
+        serviceTypeDuration: serviceType.duration,
+        appointmentDate: appointment.preferred_date,
+        appointmentStartTime: appointment.preferred_time,
+        appointmentEndTime: disponibilidad.end_time,
+        appointmentId: appointment.id
+      };
+
+      try {
+        await sendAppointmentConfirmationEmail(patient.email, emailDetails, process.env.BASE_URL || 'http://localhost:3000');
+      } catch (emailError) {
+        console.error('Error al enviar correo:', emailError);
+      }
+
+      // 16. Retornar respuesta exitosa según especificaciones
+      res.status(201).json({
+        success: true,
+        data: {
+          id: appointment.id,
+          patient_id: appointment.user_id,
+          disponibilidad_id: appointment.disponibilidad_id,
+          service_type_id: appointment.service_type_id,
+          preferred_date: appointment.preferred_date,
+          notes: appointment.notes,
+          status: appointment.status,
+          created_at: appointment.createdAt,
+          updated_at: appointment.updatedAt
+        },
+        message: 'Cita creada exitosamente'
+      });
+
+    } catch (error) {
+      await t.rollback();
+      console.error('Error al crear cita como usuario registrado:', error);
       res.status(500).json({
         success: false,
-        message: 'Error interno del servidor'
+        error: 'Error interno del servidor'
       });
     }
   },

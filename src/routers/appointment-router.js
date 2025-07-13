@@ -13,7 +13,7 @@ router.get('/confirm/:id', appointmentController.confirmAppointmentByEmail);
 router.use(authenticateToken);
 
 // Crear cita como usuario registrado
-router.post('/user', appointmentController.createUserAppointment);
+router.post('/patient', appointmentController.createUserAppointment);
 
 // Obtener citas del usuario autenticado
 router.get('/user', appointmentController.getUserAppointments);
