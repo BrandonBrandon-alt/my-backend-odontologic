@@ -10,8 +10,18 @@ const disponibilidadController = {
   // Obtener todas las disponibilidades activas
   async getAll(req, res) {
     try {
+      const now = new Date();
+      const todayStr = now.toISOString().slice(0, 10); // 'YYYY-MM-DD'
+      const currentTimeStr = now.toTimeString().slice(0, 8); // 'HH:MM:SS'
+
       const disponibilidades = await Disponibilidad.findAll({
-        where: { is_active: true },
+        where: {
+          is_active: true,
+          [Op.or]: [
+            { date: { [Op.gt]: todayStr } },
+            { date: todayStr, start_time: { [Op.gt]: currentTimeStr } }
+          ]
+        },
         include: [
           {
             model: User,
@@ -50,13 +60,23 @@ const disponibilidadController = {
       const { especialidad_id } = req.params;
       const { date } = req.query; // Fecha opcional para filtrar
 
+      const now = new Date();
+      const todayStr = now.toISOString().slice(0, 10);
+      const currentTimeStr = now.toTimeString().slice(0, 8);
+
       const whereClause = {
         especialidad_id,
-        is_active: true
+        is_active: true,
       };
 
       if (date) {
         whereClause.date = date;
+      } else {
+        // Solo mostrar futuras si no se filtra por fecha específica
+        whereClause[Op.or] = [
+          { date: { [Op.gt]: todayStr } },
+          { date: todayStr, start_time: { [Op.gt]: currentTimeStr } }
+        ];
       }
 
       const disponibilidades = await Disponibilidad.findAll({
@@ -99,13 +119,23 @@ const disponibilidadController = {
       const { dentist_id } = req.params;
       const { date } = req.query; // Fecha opcional para filtrar
 
+      const now = new Date();
+      const todayStr = now.toISOString().slice(0, 10);
+      const currentTimeStr = now.toTimeString().slice(0, 8);
+
       const whereClause = {
         dentist_id,
-        is_active: true
+        is_active: true,
       };
 
       if (date) {
         whereClause.date = date;
+      } else {
+        // Solo mostrar futuras si no se filtra por fecha específica
+        whereClause[Op.or] = [
+          { date: { [Op.gt]: todayStr } },
+          { date: todayStr, start_time: { [Op.gt]: currentTimeStr } }
+        ];
       }
 
       const disponibilidades = await Disponibilidad.findAll({
