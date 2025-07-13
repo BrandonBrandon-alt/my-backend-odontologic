@@ -13,6 +13,7 @@ const especialidadRouter = require('./routers/especialidad-router');
 const serviceTypeRouter = require('./routers/service-type-router');
 const disponibilidadRouter = require('./routers/disponibilidad-router');
 const contactRouter = require('./routers/contact-router');
+const adminRouter = require('./routers/admin-router');
 const app = express();
 
 // Configuración de CORS
@@ -37,5 +38,8 @@ app.use('/api/contact', contactRouter); // POST /api/contact/send-message
 // Rutas de autenticación y usuario
 app.use('/api', authRouter);
 app.use('/api/user', userRouter);
+
+// Rutas de administrador
+app.use('/api/admin', adminRouter);
 
 module.exports = app;
