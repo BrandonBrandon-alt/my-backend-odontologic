@@ -25,3 +25,11 @@ exports.getDentist = async (req, res) => {
 }
 
 // ======================= CONTROLADOR DE CLIENTES =======================
+
+exports.getAllUsers = async (req, res) => {
+
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const users = await adminService.getAllUsers(page, limit);
+  res.status(200).json(users);
+}
