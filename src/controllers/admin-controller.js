@@ -2,6 +2,7 @@ const { User } = require('../models/index');
 const adminService = require('../services/admin-service')
 
 
+// ======================= CONTROLADOR DE ADMINISTRADOR =======================
 exports.listDentists = async (req, res) => {
 
   // Extrae params de query con valores por defecto
@@ -22,3 +23,5 @@ exports.getDentist = async (req, res) => {
     res.status(404).json({ message: error.message });
   }
 }
+
+// ======================= CONTROLADOR DE CLIENTES =======================
