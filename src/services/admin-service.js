@@ -36,3 +36,36 @@ exports.getAllDentists = async (page = 1, limit = 10) => {
     data: validatedDentists
   };
 };
+
+exports.getDentist = async (id_number) => {
+  const dentist = await User.findOne({
+    where: { id_number, role: 'dentist' },  // 👈 Usa where correctamente
+    attributes: [
+      'id',
+      'id_number',
+      'name',
+      'email',
+      'phone',
+      'role',
+      'status'
+    ]
+  });
+
+  if (!dentist) {
+    throw new Error('Dentista no encontrado');
+  }
+
+  const { error, value } = dentistsDto.validate(
+    dentist.toJSON(),
+    { stripUnknown: true }
+  );
+
+  if (error) {
+    console.warn('Registro inválido:', error.details[0].message);
+    throw new Error('Datos del dentista inválidos');
+  }
+
+  return value;
+};
+
+
