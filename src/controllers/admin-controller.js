@@ -11,3 +11,14 @@ exports.listDentists = async (req, res) => {
   const doctors = await adminService.getAllDentists();
   res.status(200).json(doctors);
 };
+
+exports.getDentist = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const dentist = await adminService.getDentist(id);
+    res.status(200).json(dentist);
+  } catch (error) {
+    res.status(404).json({ message: error.message });
+  }
+}
