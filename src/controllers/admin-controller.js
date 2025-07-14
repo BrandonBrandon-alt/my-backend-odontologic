@@ -33,3 +33,13 @@ exports.getAllUsers = async (req, res) => {
   const users = await adminService.getAllUsers(page, limit);
   res.status(200).json(users);
 }
+
+exports.getUser = async(req, res) => {
+  const { id } = req.params;
+  try{
+    const user = await adminService.getUser(id);
+    res.status(200).json(user);
+  }catch(error) {
+    res.status(404).json({ message: error.message });
+  }
+}
