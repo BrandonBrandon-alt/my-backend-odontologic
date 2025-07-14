@@ -1,6 +1,8 @@
 const { User } = require('../models/index');
 const dentistsDto = require('../dtos/dentists-dto');
 
+// ======================= SERVICIO DE ADMINISTRADOR =======================
+
 exports.getAllDentists = async (page = 1, limit = 10) => {
   const offset = (page - 1) * limit;
 
@@ -68,4 +70,51 @@ exports.getDentist = async (id_number) => {
   return value;
 };
 
+// ======================= SERVICIO DE CLIENTES =======================
+
+exports.getAllClients = async (page = 1, limit = 10) => {
+  const offset = (page - 1) * limit;
+
+  const { rows: clients, count: total } = await User.findAndCountAll({
+    where: { role: 'user' },
+    attributes: [
+      'id',
+      'id_number',
+      'name',
+      'email',
+      'phone',
+      'role',
+      'status'
+    ],
+    limit,
+    offset
+  });
+
+  return {
+    total,
+    page,
+    totalPages: Math.ceil(total / limit),
+    limit,
+    data: clients.map(client => client.toJSON())
+  };
+}
+
+exports.getClient = async (id_number) => {
+  const client = await User.findOne({   
+    where: { id_number, role: 'user' },
+    attributes: [
+      'id',
+      'id_number',
+      'name',
+      'email',
+      'phone',
+      'role',
+      'status'
+    ]
+  });
+  if (!client) {
+    throw new Error('Cliente no encontrado');
+  }
+  return client.toJSON();
+}
 

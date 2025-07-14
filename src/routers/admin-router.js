@@ -7,5 +7,7 @@ const adminController = require('../controllers/admin-controller');
 // routers/admin-router.js
 router.get('/dentists', adminController.listDentists);
 router.get('/dentist/:id', adminController.getDentist);
+router.get('/users', adminController.getAllUsers);
+router.get('/users/:id', adminController.getUser);
 
 module.exports = router;
