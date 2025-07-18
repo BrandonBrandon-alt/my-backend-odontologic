@@ -14,6 +14,7 @@ const serviceTypeRouter = require('./routers/service-type-router');
 const disponibilidadRouter = require('./routers/disponibilidad-router');
 const contactRouter = require('./routers/contact-router');
 const adminRouter = require('./routers/admin-router');
+const errorHandler = require('./middleware/error-handler');
 const app = express();
 
 // Configuración de CORS
@@ -41,5 +42,8 @@ app.use('/api/user', userRouter);
 
 // Rutas de administrador
 app.use('/api/admin', adminRouter);
+
+// Middleware global de manejo de errores (debe ir al final)
+app.use(errorHandler);
 
 module.exports = app;

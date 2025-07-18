@@ -1,6 +1,7 @@
 const authController = require('../../controllers/auth-controller');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const recaptchaMiddleware = require('../../middleware/recaptcha-middleware');
 
 // Mock de los modelos
 jest.mock('../../models', () => ({
@@ -8,6 +9,12 @@ jest.mock('../../models', () => ({
     findOne: jest.fn(),
     create: jest.fn(),
     update: jest.fn()
+  },
+  RefreshToken: {
+    create: jest.fn(),
+    findOne: jest.fn(),
+    findAll: jest.fn(),
+    destroy: jest.fn()
   }
 }));
 
@@ -33,7 +40,7 @@ jest.mock('axios', () => ({
   post: jest.fn()
 }));
 
-const { User } = require('../../models');
+const { User, RefreshToken } = require('../../models');
 const { sendActivationEmail } = require('../../utils/mailer');
 const axios = require('axios');
 
@@ -52,6 +59,7 @@ describe('Auth Controller', () => {
     axios.post.mockResolvedValue({
       data: { success: true }
     });
+    mockNext = jest.fn();
   });
 
   describe('registro', () => {
@@ -140,12 +148,11 @@ describe('Auth Controller', () => {
       mockReq.body = userData;
       User.findOne.mockResolvedValue({ id: 1, email: userData.email });
 
-      await authController.registro(mockReq, mockRes);
-
-      expect(mockRes.status).toHaveBeenCalledWith(400);
-      expect(mockRes.json).toHaveBeenCalledWith({
-        error: 'El usuario ya existe con ese email o número de identificación'
-      });
+      await authController.registro(mockReq, mockRes, mockNext);
+      expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'El usuario ya existe con ese email o número de identificación',
+        status: 400
+      }));
     });
 
     it('debería manejar errores internos', async () => {
@@ -163,13 +170,10 @@ describe('Auth Controller', () => {
       mockReq.body = userData;
       User.findOne.mockRejectedValue(new Error('Error de base de datos'));
 
-      await authController.registro(mockReq, mockRes);
-
-      expect(mockRes.status).toHaveBeenCalledWith(500);
-      expect(mockRes.json).toHaveBeenCalledWith({
-        error: 'Error al registrar usuario',
-        details: 'Error de base de datos'
-      });
+      await authController.registro(mockReq, mockRes, mockNext);
+      expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'Error de base de datos'
+      }));
     });
 
     it('debería rechazar si reCAPTCHA falla', async () => {
@@ -183,19 +187,14 @@ describe('Auth Controller', () => {
         birth_date: '1990-05-15',
         captchaToken: 'invalid-captcha-token'
       };
-
-      // Mock de reCAPTCHA fallido
-      axios.post.mockResolvedValue({
-        data: { success: false }
-      });
-
+      axios.post.mockResolvedValue({ data: { success: false } });
       mockReq.body = userData;
-
-      await authController.registro(mockReq, mockRes);
-
-      expect(mockRes.status).toHaveBeenCalledWith(400);
+      let middlewareCalled = false;
+      await recaptchaMiddleware(mockReq, mockRes, () => { middlewareCalled = true; });
+      expect(middlewareCalled).toBe(false);
+      expect(mockRes.status).toHaveBeenCalledWith(403);
       expect(mockRes.json).toHaveBeenCalledWith({
-        error: 'Verificación de reCAPTCHA fallida. Intenta de nuevo.'
+        error: 'Verificación de reCAPTCHA fallida o actividad sospechosa.'
       });
     });
   });
@@ -251,12 +250,11 @@ describe('Auth Controller', () => {
       mockReq.body = activationData;
       User.findOne.mockResolvedValue(user);
 
-      await authController.activar(mockReq, mockRes);
-
-      expect(mockRes.status).toHaveBeenCalledWith(400);
-      expect(mockRes.json).toHaveBeenCalledWith({
-        error: 'El código de activación ha expirado. Por favor, solicita uno nuevo.'
-      });
+      await authController.activar(mockReq, mockRes, mockNext);
+      expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'El código de activación ha expirado. Por favor, solicita uno nuevo.',
+        status: 400
+      }));
     });
 
     it('debería rechazar código inválido', async () => {
@@ -268,12 +266,11 @@ describe('Auth Controller', () => {
       mockReq.body = activationData;
       User.findOne.mockResolvedValue(null);
 
-      await authController.activar(mockReq, mockRes);
-
-      expect(mockRes.status).toHaveBeenCalledWith(400);
-      expect(mockRes.json).toHaveBeenCalledWith({
-        error: 'Código o correo incorrecto'
-      });
+      await authController.activar(mockReq, mockRes, mockNext);
+      expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'Código o correo incorrecto',
+        status: 400
+      }));
     });
   });
 
@@ -310,14 +307,19 @@ describe('Auth Controller', () => {
       jwt.sign
         .mockReturnValueOnce(mockToken)
         .mockReturnValueOnce(mockRefreshToken);
-
-      await authController.login(mockReq, mockRes);
-
+      RefreshToken.create.mockResolvedValue({});
+      await authController.login(mockReq, mockRes, mockNext);
       expect(User.findOne).toHaveBeenCalledWith({
         where: { email: loginData.email }
       });
       expect(bcrypt.compare).toHaveBeenCalledWith(loginData.password, user.password);
       expect(jwt.sign).toHaveBeenCalledTimes(2);
+      expect(RefreshToken.create).toHaveBeenCalledWith(expect.objectContaining({
+        user_id: user.id,
+        token: mockRefreshToken,
+        expires_at: expect.any(Date)
+      }));
+      expect(mockRes.status).toHaveBeenCalledWith(200);
       expect(mockRes.json).toHaveBeenCalledWith({
         message: 'Inicio de sesión exitoso',
         token: mockToken,
@@ -340,12 +342,11 @@ describe('Auth Controller', () => {
       mockReq.body = loginData;
       User.findOne.mockResolvedValue(null);
 
-      await authController.login(mockReq, mockRes);
-
-      expect(mockRes.status).toHaveBeenCalledWith(400);
-      expect(mockRes.json).toHaveBeenCalledWith({
-        error: 'Usuario no encontrado'
-      });
+      await authController.login(mockReq, mockRes, mockNext);
+      expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'Credenciales inválidas',
+        status: 400
+      }));
     });
 
     it('debería rechazar contraseña incorrecta', async () => {
@@ -366,12 +367,11 @@ describe('Auth Controller', () => {
       User.findOne.mockResolvedValue(user);
       bcrypt.compare.mockResolvedValue(false);
 
-      await authController.login(mockReq, mockRes);
-
-      expect(mockRes.status).toHaveBeenCalledWith(400);
-      expect(mockRes.json).toHaveBeenCalledWith({
-        error: 'Contraseña incorrecta'
-      });
+      await authController.login(mockReq, mockRes, mockNext);
+      expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'Credenciales inválidas',
+        status: 400
+      }));
     });
 
     it('debería rechazar cuenta inactiva', async () => {
@@ -392,12 +392,11 @@ describe('Auth Controller', () => {
       User.findOne.mockResolvedValue(user);
       bcrypt.compare.mockResolvedValue(true);
 
-      await authController.login(mockReq, mockRes);
-
-      expect(mockRes.status).toHaveBeenCalledWith(403);
-      expect(mockRes.json).toHaveBeenCalledWith({
-        error: 'Cuenta inactiva o bloqueada. Por favor, activa tu cuenta.'
-      });
+      await authController.login(mockReq, mockRes, mockNext);
+      expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'Cuenta inactiva o bloqueada. Por favor, activa tu cuenta.',
+        status: 403
+      }));
     });
 
     it('debería rechazar si reCAPTCHA falla', async () => {
@@ -406,19 +405,14 @@ describe('Auth Controller', () => {
         password: 'password123',
         captchaToken: 'invalid-captcha-token'
       };
-
-      // Mock de reCAPTCHA fallido
-      axios.post.mockResolvedValue({
-        data: { success: false }
-      });
-
+      axios.post.mockResolvedValue({ data: { success: false } });
       mockReq.body = loginData;
-
-      await authController.login(mockReq, mockRes);
-
+      let middlewareCalled = false;
+      await recaptchaMiddleware(mockReq, mockRes, () => { middlewareCalled = true; });
+      expect(middlewareCalled).toBe(false);
       expect(mockRes.status).toHaveBeenCalledWith(403);
       expect(mockRes.json).toHaveBeenCalledWith({
-        error: 'Verificación de reCAPTCHA fallida. Intenta de nuevo.'
+        error: 'Verificación de reCAPTCHA fallida o actividad sospechosa.'
       });
     });
   });
@@ -428,7 +422,6 @@ describe('Auth Controller', () => {
       const refreshData = {
         refreshToken: 'valid.refresh.token'
       };
-
       const decodedToken = {
         id: 1,
         name: 'Test User',
@@ -436,23 +429,19 @@ describe('Auth Controller', () => {
         role: 'user',
         status: 'active'
       };
-
       const mockNewToken = 'new.jwt.token';
-
-      // Asegura que el token esté en el array global del controlador
-      const { getRefreshTokens } = require('../../controllers/auth-controller');
-      if (getRefreshTokens) {
-        getRefreshTokens().push(refreshData.refreshToken);
-      }
-
+      // Simular que el token existe en la base de datos
+      RefreshToken.findOne.mockResolvedValue({
+        token: refreshData.refreshToken,
+        expires_at: new Date(Date.now() + 10000),
+        destroy: jest.fn()
+      });
       mockReq.body = refreshData;
       jwt.verify.mockImplementation((token, secret, callback) => {
         callback(null, decodedToken);
       });
       jwt.sign.mockReturnValue(mockNewToken);
-
-      await authController.refreshToken(mockReq, mockRes);
-
+      await authController.refreshToken(mockReq, mockRes, mockNext);
       expect(jwt.verify).toHaveBeenCalledWith(refreshData.refreshToken, process.env.JWT_REFRESH_SECRET, expect.any(Function));
       expect(jwt.sign).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -474,15 +463,14 @@ describe('Auth Controller', () => {
       const refreshData = {
         refreshToken: 'invalid.refresh.token'
       };
-
+      // Mock explícito para este test
+      RefreshToken.findOne.mockResolvedValue(null);
       mockReq.body = refreshData;
-
-      await authController.refreshToken(mockReq, mockRes);
-
-      expect(mockRes.status).toHaveBeenCalledWith(401);
-      expect(mockRes.json).toHaveBeenCalledWith({
-        error: 'Refresh token inválido'
-      });
+      await authController.refreshToken(mockReq, mockRes, mockNext);
+      expect(mockNext).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'Refresh token inválido',
+        status: 401
+      }));
     });
   });
 
@@ -491,11 +479,10 @@ describe('Auth Controller', () => {
       const logoutData = {
         refreshToken: 'valid.refresh.token'
       };
-
+      RefreshToken.destroy.mockResolvedValue(1);
       mockReq.body = logoutData;
-
-      await authController.logout(mockReq, mockRes);
-
+      await authController.logout(mockReq, mockRes, mockNext);
+      expect(RefreshToken.destroy).toHaveBeenCalledWith({ where: { token: logoutData.refreshToken } });
       expect(mockRes.json).toHaveBeenCalledWith({
         success: true,
         message: 'Logout exitoso'

@@ -4,10 +4,11 @@ const express = require("express");
 const router = express.Router();
 
 const authController = require('../controllers/auth-controller');
+const recaptchaMiddleware = require('../middleware/recaptcha-middleware');
 
 // ======================= RUTAS =======================
-router.post("/registro", authController.registro);
-router.post("/login", authController.login);
+router.post("/registro", recaptchaMiddleware, authController.registro);
+router.post("/login", recaptchaMiddleware, authController.login);
 router.post("/token", authController.refreshToken);
 router.post("/activar", authController.activar);
 router.post("/reenviar-activacion", authController.resendActivationCode);

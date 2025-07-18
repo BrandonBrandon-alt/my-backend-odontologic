@@ -22,6 +22,7 @@ const Disponibilidad = require('./disponibilidad-model')(sequelize);
 const ServiceType = require('./service-type-model')(sequelize);
 const Appointment = require('./appointment-model')(sequelize);
 const ContactMessage = require('./contact-message-model')(sequelize);
+const RefreshToken = require('./refresh-token-model')(sequelize);
 
 // --- Definición de Asociaciones ---
 
@@ -116,7 +117,7 @@ ServiceType.belongsTo(Especialidad, {
 //   .catch(err => console.error('Error al sincronizar la base de datos:', err));
 
 // Exporta todos los modelos y la instancia de Sequelize
-module.exports = {
+const models = {
   sequelize,
   User,
   GuestPatient,
@@ -125,4 +126,11 @@ module.exports = {
   ServiceType,
   Appointment,
   ContactMessage,
+  RefreshToken,
 };
+
+if (models.User && models.RefreshToken) {
+  models.RefreshToken.associate(models);
+}
+
+module.exports = models;
