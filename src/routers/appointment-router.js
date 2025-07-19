@@ -1,33 +1,26 @@
 const express = require('express');
 const router = express.Router();
 const appointmentController = require('../controllers/appointment-controller');
-const { authenticateToken } = require('../middleware/auth-middleware');
+const serverAppointmentController = require('../controllers/server-appointment-controller');
+const { authenticateToken, authorizeRoles } = require('../middleware/auth-middleware');
 
 // Rutas públicas (sin autenticación)
 router.post('/guest', appointmentController.createGuestAppointment);
-
-// Ruta para confirmar cita mediante email (pública)
 router.get('/confirm/:id', appointmentController.confirmAppointmentByEmail);
 
 // Rutas protegidas (requieren autenticación)
 router.use(authenticateToken);
 
-// Crear cita como usuario registrado
+// Crear cita como usuario autenticado
 router.post('/patient', appointmentController.createUserAppointment);
 
 // Obtener citas del usuario autenticado
-router.get('/user', appointmentController.getUserAppointments);
+router.get('/my', appointmentController.getMyAppointments);
 
-// Obtener estadísticas de citas
-router.get('/stats', appointmentController.getAppointmentStats);
-
-// Obtener todas las citas (para administradores)
-router.get('/', appointmentController.getAllAppointments);
-
-// Obtener una cita específica
-router.get('/:id', appointmentController.getById);
-
-// Actualizar estado de una cita
-router.patch('/:id/status', appointmentController.updateStatus);
+// Rutas de administración (solo admin)
+router.get('/stats', authorizeRoles('admin'), serverAppointmentController.getAppointmentStats);
+router.get('/', authorizeRoles('admin'), serverAppointmentController.getAllAppointments);
+router.get('/:id', authorizeRoles('admin'), serverAppointmentController.getById);
+router.patch('/:id/status', authorizeRoles('admin'), serverAppointmentController.updateStatus);
 
 module.exports = router; 

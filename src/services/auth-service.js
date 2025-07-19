@@ -12,8 +12,13 @@ const { sanitizeUser } = require('../utils/user-utils');
 const util = require('util');
 const jwtVerifyAsync = util.promisify(jwt.verify);
 
-function generateCodeWithExpiration(bytes = 2, expiresInMinutes = 60) {
-    const code = crypto.randomBytes(bytes).toString("hex");
+function generateCodeWithExpiration(length = 6, expiresInMinutes = 60) {
+    // Caracteres permitidos: solo mayúsculas y números, sin O, I, L, 0, 1
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    for (let i = 0; i < length; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
     const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);
     return { code, expiresAt };
 }
@@ -75,7 +80,7 @@ async function register(data) {
     };
     const user = await User.create(userToCreate);
     await sendActivationEmail(email, activationCode);
-    return sanitizeUser(user);
+    return { success: true, user: sanitizeUser(user) };
 }
 
 async function login(data) {

@@ -1,55 +1,10 @@
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
-const crypto = require("crypto");
-const axios = require("axios");
-const { Op } = require("sequelize");
-const util = require('util');
-
-const createUserDTO = require('../dtos/registro-dto');
-const loginDTO = require('../dtos/login-dto');
-const resetPasswordDTO = require('../dtos/reset-password-dto');
-const { User } = require('../models/index');
-const { sendActivationEmail, sendPasswordResetEmail } = require('../utils/mailer');
-const { sanitizeUser } = require('../utils/user-utils');
 const authService = require('../services/auth-service');
-
-
-
-function generateCodeWithExpiration(bytes = 2, expiresInMinutes = 60) {
-    const code = crypto.randomBytes(bytes).toString("hex");
-    const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);
-    return { code, expiresAt };
-}
-
-async function verifyRecaptcha(token) {
-    const secret = process.env.RECAPTCHA_SECRET_KEY;
-    const url = "https://www.google.com/recaptcha/api/siteverify";
-    try {
-        const response = await axios.post(
-            url,
-            null,
-            {
-                params: {
-                    secret: secret,
-                    response: token,
-                },
-            }
-        );
-        console.log("Respuesta de Google reCAPTCHA:", response.data); // <-- Agrega esto
-        return response.data;
-    } catch (error) {
-        console.error("Error al verificar reCAPTCHA:", error);
-        return { success: false };
-    }
-}
-
-const jwtVerifyAsync = util.promisify(jwt.verify);
 
 const register = async (req, res, next) => {
     try {
         const user = await authService.register(req.body);
         res.status(201).json({
-            message: "Usuario registrado exitosamente. Revisa tu correo para activar tu cuenta.",
+            message: "User registered successfully. Check your email to activate your account.",
             user
         });
     } catch (err) {
@@ -65,8 +20,6 @@ const login = async (req, res, next) => {
         next(err);
     }
 };
-
-
 
 const activateAccount = async (req, res, next) => {
     try {
@@ -140,10 +93,9 @@ const logout = async (req, res, next) => {
     }
 };
 
-
 module.exports = {
-    registro: register,
-    activar: activateAccount,
+    register,
+    activate: activateAccount,
     login,
     refreshToken,
     logout,
@@ -152,5 +104,4 @@ module.exports = {
     resendPasswordReset,
     resetPassword,
     verifyResetCode,
-    verifyRecaptcha: authService.verifyRecaptcha
 }; 

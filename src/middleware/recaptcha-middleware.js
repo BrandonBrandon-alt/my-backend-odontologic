@@ -1,4 +1,4 @@
-const { verifyRecaptcha } = require('../controllers/auth-controller');
+const { verifyRecaptcha } = require('../services/auth-service');
 
 module.exports = async (req, res, next) => {
     const { captchaToken } = req.body;

@@ -1,41 +1,12 @@
-const { ContactMessage } = require('../models');
-const { sendConfirmationEmail, sendNotificationEmail } = require('../utils/mailer');
+const contactService = require('../services/contact-service');
 
 const sendContactMessage = async (req, res) => {
   try {
-    const { name, email, phone, subject, message } = req.body;
-    
-    // Crear el mensaje en la base de datos
-    const contactMessage = await ContactMessage.create({
-      name,
-      email,
-      phone,
-      subject,
-      message,
-      ipAddress: req.ip,
+    const result = await contactService.sendContactMessage(req.body, {
+      ip: req.ip,
       userAgent: req.headers['user-agent']
     });
-    
-    // Enviar emails (asíncrono para no bloquear la respuesta)
-    Promise.all([
-      sendConfirmationEmail(email, name),
-      sendNotificationEmail(contactMessage)
-    ]).catch(error => {
-      console.error('Error enviando emails:', error);
-      // No fallar la respuesta si los emails fallan
-    });
-    
-    // Respuesta exitosa
-    res.status(200).json({
-      success: true,
-      message: 'Mensaje enviado correctamente. Te contactaremos pronto.',
-      data: {
-        id: contactMessage.id,
-        timestamp: contactMessage.createdAt,
-        status: contactMessage.status
-      }
-    });
-    
+    res.status(200).json(result);
   } catch (error) {
     console.error('Error en contacto:', error);
     res.status(500).json({

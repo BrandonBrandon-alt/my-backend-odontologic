@@ -6,19 +6,23 @@ const router = express.Router();
 const authController = require('../controllers/auth-controller');
 const recaptchaMiddleware = require('../middleware/recaptcha-middleware');
 
-// ======================= RUTAS =======================
-router.post("/registro", recaptchaMiddleware, authController.registro);
+// ==== Register and login ====
+router.post("/register", recaptchaMiddleware, authController.register);
 router.post("/login", recaptchaMiddleware, authController.login);
 
-router.post("/activar", authController.activar);
-router.post("/reenviar-activacion", authController.resendActivationCode);
-router.post("/solicitar-reset", authController.requestPasswordReset);
-router.post("/reenviar-reset", authController.resendPasswordReset);
-router.post("/cambiar-password-reset", authController.resetPassword);
-router.post("/verificar-reset", authController.verifyResetCode);
+// ==== Account activation ====
+router.post("/active", authController.activate);
+router.post("/resend-activation", authController.resendActivationCode);
+
+// ==== Password recovery ====
+router.post("/request-reset", authController.requestPasswordReset);
+router.post("/resend-reset", authController.resendPasswordReset);
+router.post("/change-password-reset", authController.resetPassword);
+router.post("/verify-reset", authController.verifyResetCode);
+
+// ==== Session and tokens ====
 router.post("/logout", authController.logout);
 router.post("/token", authController.refreshToken);
 
-// ======================= EXPORTACIONES =======================
 module.exports = router;
 
