@@ -129,6 +129,8 @@ const models = {
   RefreshToken,
 };
 
+
+
 if (models.User && models.RefreshToken) {
   models.RefreshToken.associate(models);
 }

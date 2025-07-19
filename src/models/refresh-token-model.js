@@ -6,6 +6,7 @@ module.exports = (sequelize) => {
       RefreshToken.belongsTo(models.User, { foreignKey: 'user_id', as: 'user' });
     }
   }
+  
   RefreshToken.init({
     id: {
       type: DataTypes.INTEGER,
@@ -17,7 +18,7 @@ module.exports = (sequelize) => {
       allowNull: false
     },
     token: {
-      type: DataTypes.STRING,
+      type: DataTypes.TEXT,
       allowNull: false,
       unique: true
     },
@@ -44,5 +45,6 @@ module.exports = (sequelize) => {
     createdAt: 'created_at',
     updatedAt: 'updated_at'
   });
+  
   return RefreshToken;
 }; 

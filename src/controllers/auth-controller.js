@@ -13,7 +13,7 @@ const { sendActivationEmail, sendPasswordResetEmail } = require('../utils/mailer
 const { sanitizeUser } = require('../utils/user-utils');
 const authService = require('../services/auth-service');
 
-let refreshTokens = [];
+
 
 function generateCodeWithExpiration(bytes = 2, expiresInMinutes = 60) {
     const code = crypto.randomBytes(bytes).toString("hex");
@@ -66,14 +66,7 @@ const login = async (req, res, next) => {
     }
 };
 
-const refreshToken = async (req, res, next) => {
-    try {
-        const result = await authService.refreshToken(req.body.refreshToken);
-        res.json(result);
-    } catch (err) {
-        next(err);
-    }
-};
+
 
 const activateAccount = async (req, res, next) => {
     try {
@@ -129,6 +122,15 @@ const verifyResetCode = async (req, res, next) => {
     }
 };
 
+const refreshToken = async (req, res, next) => {
+    try {
+        const result = await authService.refreshToken(req.body.refreshToken);
+        res.json(result);
+    } catch (err) {
+        next(err);
+    }
+};
+
 const logout = async (req, res, next) => {
     try {
         const result = await authService.logout(req.body.refreshToken);
@@ -138,21 +140,17 @@ const logout = async (req, res, next) => {
     }
 };
 
-const getRefreshTokens = () => authService.getRefreshTokens();
-const clearRefreshTokens = () => { authService.clearRefreshTokens(); };
 
 module.exports = {
     registro: register,
     activar: activateAccount,
     login,
-    refreshToken: refreshToken,
+    refreshToken,
     logout,
     resendActivationCode,
     requestPasswordReset,
     resendPasswordReset,
     resetPassword,
     verifyResetCode,
-    getRefreshTokens,
-    clearRefreshTokens,
     verifyRecaptcha: authService.verifyRecaptcha
 }; 

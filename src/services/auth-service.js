@@ -163,6 +163,12 @@ async function refreshTokenFn(token) {
     }
 }
 
+async function logout(token) {
+    // Eliminar el refresh token de la base de datos
+    await RefreshToken.destroy({ where: { token } });
+    return { success: true, message: "Logout exitoso" };
+}
+
 async function activateAccount(data) {
     const { email, code } = data;
     const user = await User.findOne({ where: { email, activation_code: code } });
@@ -298,14 +304,6 @@ async function verifyResetCode(data) {
     return { message: "Código válido" };
 }
 
-function logout(token) {
-    // Eliminar el refresh token de la base de datos
-    return RefreshToken.destroy({ where: { token } }).then(() => ({ success: true, message: "Logout exitoso" }));
-}
-
-function getRefreshTokens() { return RefreshToken.findAll(); }
-function clearRefreshTokens() { return RefreshToken.destroy({ where: {} }); }
-
 module.exports = {
     register,
     login,
@@ -317,7 +315,5 @@ module.exports = {
     resetPassword,
     verifyResetCode,
     verifyRecaptcha,
-    logout,
-    getRefreshTokens,
-    clearRefreshTokens
+    logout
 }; 

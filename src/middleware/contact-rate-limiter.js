@@ -2,9 +2,19 @@ const { RateLimiterMemory } = require('rate-limiter-flexible');
 
 const rateLimiter = new RateLimiterMemory({
   keyGenerator: (req) => req.ip,
-  points: 3, // 3 mensajes
+  points: 10, // 10 mensajes
   duration: 3600, // por hora
 });
+
+// Método para resetear el contador de una IP (solo para desarrollo)
+async function resetRateLimit(ip) {
+  try {
+    await rateLimiter.delete(ip);
+    console.log(`Contador de rate limit reseteado para IP: ${ip}`);
+  } catch (e) {
+    console.log('No se pudo resetear el rate limit:', e.message);
+  }
+}
 
 const contactRateLimiter = async (req, res, next) => {
   try {
@@ -17,5 +27,7 @@ const contactRateLimiter = async (req, res, next) => {
     });
   }
 };
+
+contactRateLimiter.resetRateLimit = resetRateLimit;
 
 module.exports = contactRateLimiter; 
