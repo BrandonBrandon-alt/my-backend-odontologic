@@ -3,6 +3,8 @@
 require("dotenv").config();
 const { Sequelize } = require("sequelize");
 
+// 1. DATABASE CONNECTION
+// Centralized Sequelize instance using environment variables.
 const sequelize = new Sequelize(
   process.env.DB_NAME,
   process.env.DB_USER,
@@ -10,129 +12,78 @@ const sequelize = new Sequelize(
   {
     host: process.env.DB_HOST,
     dialect: "postgres",
-    logging: false, // Puedes cambiar a true en desarrollo para ver las consultas SQL
+    logging: false, // Set to console.log to see SQL queries in development.
   }
 );
 
-// Importa tus modelos
-const User = require('./user-model')(sequelize);
-const GuestPatient = require('./guest-patient-model')(sequelize);
-const Especialidad = require('./especialidad-model')(sequelize);
-const Disponibilidad = require('./disponibilidad-model')(sequelize);
-const ServiceType = require('./service-type-model')(sequelize);
-const Appointment = require('./appointment-model')(sequelize);
-const ContactMessage = require('./contact-message-model')(sequelize);
-const RefreshToken = require('./refresh-token-model')(sequelize);
+// 2. MODEL LOADING
+// Import all models and initialize them with the sequelize instance.
+const models = {
+  User: require('./user.model')(sequelize),
+  GuestPatient: require('./guest-patient.model')(sequelize),
+  Specialty: require('./specialty.model')(sequelize),
+  Availability: require('./availability.model')(sequelize), // Formerly Disponibilidad
+  ServiceType: require('./service-type.model')(sequelize),
+  Appointment: require('./appointment.model')(sequelize),
+  ContactMessage: require('./contact-message.model')(sequelize),
+  RefreshToken: require('./refresh-token.model')(sequelize),
+};
 
-// --- Definición de Asociaciones ---
-
-// 1. User (Paciente registrado) y Appointment
-User.hasMany(Appointment, {
-  foreignKey: 'user_id', // FK en Appointment que apunta a User
-  as: 'userAppointments' // Alias para cuando se incluya desde User
-});
-Appointment.belongsTo(User, {
-  foreignKey: 'user_id',
-  as: 'user' // Alias para cuando se incluya desde Appointment
-});
-
-// 2. GuestPatient (Paciente invitado) y Appointment
-GuestPatient.hasMany(Appointment, {
-  foreignKey: 'guest_patient_id', // FK en Appointment que apunta a GuestPatient
-  as: 'guestAppointments'
-});
-Appointment.belongsTo(GuestPatient, {
-  foreignKey: 'guest_patient_id',
-  as: 'guestPatient'
+// 3. DEFINE ASSOCIATIONS
+// A more robust way to associate models. This loop finds any model
+// with a static 'associate' method and executes it.
+Object.keys(models).forEach(modelName => {
+  if (models[modelName].associate) {
+    models[modelName].associate(models);
+  }
 });
 
-// 3. Appointment y Disponibilidad
-Disponibilidad.hasMany(Appointment, {
-  foreignKey: 'disponibilidad_id', // FK en Appointment que apunta a Disponibilidad
-  as: 'appointments'
-});
-Appointment.belongsTo(Disponibilidad, {
-  foreignKey: 'disponibilidad_id',
-  as: 'disponibilidad'
-});
+// User (as Patient) and Appointment (One-to-Many)
+models.User.hasMany(models.Appointment, { foreignKey: 'user_id', as: 'appointments' });
+models.Appointment.belongsTo(models.User, { foreignKey: 'user_id', as: 'user' });
 
-// 4. Appointment y ServiceType
-ServiceType.hasMany(Appointment, {
-  foreignKey: 'service_type_id', // FK en Appointment que apunta a ServiceType
-  as: 'appointments'
-});
-Appointment.belongsTo(ServiceType, {
-  foreignKey: 'service_type_id',
-  as: 'serviceType'
-});
+// GuestPatient and Appointment (One-to-Many)
+models.GuestPatient.hasMany(models.Appointment, { foreignKey: 'guest_patient_id', as: 'appointments' });
+models.Appointment.belongsTo(models.GuestPatient, { foreignKey: 'guest_patient_id', as: 'guestPatient' });
 
-// 5. User (Odontólogo) y Disponibilidad
-User.hasMany(Disponibilidad, {
-  foreignKey: 'dentist_id', // FK en Disponibilidad que apunta al User dentista
-  as: 'dentistAvailabilities'
-});
-Disponibilidad.belongsTo(User, {
+// Availability and Appointment (One-to-Many)
+models.Availability.hasMany(models.Appointment, { foreignKey: 'availability_id', as: 'appointments' });
+models.Appointment.belongsTo(models.Availability, { foreignKey: 'availability_id', as: 'availability' });
+
+// ServiceType and Appointment (One-to-Many)
+models.ServiceType.hasMany(models.Appointment, { foreignKey: 'service_type_id', as: 'appointments' });
+models.Appointment.belongsTo(models.ServiceType, { foreignKey: 'service_type_id', as: 'serviceType' });
+
+// User (as Dentist) and Availability (One-to-Many)
+models.User.hasMany(models.Availability, { foreignKey: 'dentist_id', as: 'availabilities' });
+models.Availability.belongsTo(models.User, { foreignKey: 'dentist_id', as: 'dentist' });
+
+// Specialty and Availability (One-to-Many)
+models.Specialty.hasMany(models.Availability, { foreignKey: 'specialty_id', as: 'availabilities' });
+models.Availability.belongsTo(models.Specialty, { foreignKey: 'specialty_id', as: 'specialty' });
+
+// Specialty and ServiceType (One-to-Many)
+models.Specialty.hasMany(models.ServiceType, { foreignKey: 'specialty_id', as: 'serviceTypes' });
+models.ServiceType.belongsTo(models.Specialty, { foreignKey: 'specialty_id', as: 'specialty' });
+
+// User (as Dentist) and Specialty (Many-to-Many)
+// This creates a join table 'DentistSpecialties' automatically.
+models.User.belongsToMany(models.Specialty, {
+  through: 'DentistSpecialties',
   foreignKey: 'dentist_id',
-  as: 'dentist'
-});
-
-// 6. Disponibilidad y Especialidad
-Especialidad.hasMany(Disponibilidad, {
-  foreignKey: 'especialidad_id', // FK en Disponibilidad que apunta a Especialidad
-  as: 'disponibilidades'
-});
-Disponibilidad.belongsTo(Especialidad, {
-  foreignKey: 'especialidad_id',
-  as: 'especialidad'
-});
-
-// 7. User (Odontólogo) y Especialidad (relación Many-to-Many)
-User.belongsToMany(Especialidad, {
-  through: 'DentistSpecialties', // Tabla intermedia automática
-  foreignKey: 'dentist_id', // FK en DentistSpecialties que apunta a User
-  otherKey: 'especialidad_id', // FK en DentistSpecialties que apunta a Especialidad
+  otherKey: 'specialty_id',
   as: 'specialties'
 });
-Especialidad.belongsToMany(User, {
+models.Specialty.belongsToMany(models.User, {
   through: 'DentistSpecialties',
-  foreignKey: 'especialidad_id',
+  foreignKey: 'specialty_id',
   otherKey: 'dentist_id',
   as: 'dentists'
 });
 
-// 8. ServiceType y Especialidad
-Especialidad.hasMany(ServiceType, {
-  foreignKey: 'especialidad_id',
-  as: 'serviceTypes'
-});
-ServiceType.belongsTo(Especialidad, {
-  foreignKey: 'especialidad_id',
-  as: 'especialidad'
-});
-
-// --- Sincronización de la Base de Datos ---
-// Comentado para evitar sincronización automática
-// sequelize.sync({ alter: true }) // 'alter: true' modificará las tablas existentes sin borrarlas. Úsalo con precaución en producción.
-//   .then(() => console.log('Base de datos y tablas sincronizadas correctamente.'))
-//   .catch(err => console.error('Error al sincronizar la base de datos:', err));
-
-// Exporta todos los modelos y la instancia de Sequelize
-const models = {
+// 4. EXPORT
+// Export the sequelize instance and all models.
+module.exports = {
+  ...models,
   sequelize,
-  User,
-  GuestPatient,
-  Especialidad,
-  Disponibilidad,
-  ServiceType,
-  Appointment,
-  ContactMessage,
-  RefreshToken,
 };
-
-
-
-if (models.User && models.RefreshToken) {
-  models.RefreshToken.associate(models);
-}
-
-module.exports = models;
