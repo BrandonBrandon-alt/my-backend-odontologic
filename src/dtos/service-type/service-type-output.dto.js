@@ -1,4 +1,4 @@
-const SpecialtyOutputDto = require('./specialty-output.dto');
+const SpecialtyOutputDto = require("../specialty/specialty-output.dto");
 
 /**
  * Data Transfer Object for formatting service type data sent to the client.
@@ -26,7 +26,7 @@ class ServiceTypeOutputDto {
    * @returns {Array<ServiceTypeOutputDto>} A list of formatted service type objects.
    */
   static fromList(serviceTypesList) {
-    return serviceTypesList.map(st => new ServiceTypeOutputDto(st));
+    return serviceTypesList.map((st) => new ServiceTypeOutputDto(st));
   }
 }
 

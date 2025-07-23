@@ -6,7 +6,7 @@ const {
   sendActivationEmail,
   sendPasswordResetEmail,
 } = require("../utils/mailer");
-const { sanitizeUser } = require("../utils/user-utils");
+const { sanitizeUser } = require("../utils/user.utils");
 
 // DTO Imports
 const registerDto = require("../dtos/auth/register.dto");

@@ -1,5 +1,5 @@
 const { ServiceType, Specialty } = require("../models");
-const createServiceTypeDto = require("../dtos/service-type/service-type-output.dto");
+const createServiceTypeDto = require("../dtos/service-type/create-service-type.dto");
 const updateServiceTypeDto = require("../dtos/service-type/update-service-type.dto");
 const ServiceTypeOutputDto = require("../dtos/service-type/service-type-output.dto");
 

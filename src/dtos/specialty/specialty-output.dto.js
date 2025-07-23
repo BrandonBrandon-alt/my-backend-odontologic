@@ -17,7 +17,7 @@ class SpecialtyOutputDto {
    * @returns {Array<SpecialtyOutputDto>} A list of formatted specialty objects.
    */
   static fromList(specialtiesList) {
-    return specialtiesList.map(sp => new SpecialtyOutputDto(sp));
+    return specialtiesList.map((sp) => new SpecialtyOutputDto(sp));
   }
 }
 

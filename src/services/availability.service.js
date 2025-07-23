@@ -250,12 +250,26 @@ async function deactivate(id) {
   return { message: "Availability deactivated successfully." };
 }
 
+/**
+ * Fetches an availability by its ID and includes related data.
+ * This is the helper function that was missing.
+ */
+const findFullAvailabilityById = async (id) => {
+  return Availability.findByPk(id, {
+    include: [
+      { model: User, as: "dentist", attributes: ["id", "name"] },
+      { model: Specialty, as: "specialty", attributes: ["id", "name"] },
+    ],
+  });
+};
+
 module.exports = {
   getAll,
   getBySpecialty,
   getByDentist,
   getById,
   create,
+  update,
   // Update function is omitted as it's complex and often better handled
   // by deactivating the old and creating a new one.
   deactivate,

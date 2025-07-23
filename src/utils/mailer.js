@@ -1,7 +1,7 @@
 require('dotenv').config(); // Asegúrate de que esto se ejecute al inicio de tu aplicación para cargar las variables de entorno
 const e = require('cors');
 const nodemailer = require('nodemailer');
-const { generateConfirmationUrl } = require('./confirmation-token');
+const { generateConfirmationUrl } = require('./confirmation.token');
 
 // Define los colores de tu paleta directamente como constantes para usar en el HTML inline
 // Esto asegura la compatibilidad con la mayoría de los clientes de correo.
