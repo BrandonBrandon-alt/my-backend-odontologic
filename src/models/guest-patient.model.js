@@ -1,3 +1,7 @@
+/**
+ * Modelo GuestPatient (pacientes invitados).
+ * Representa pacientes no registrados que pueden agendar citas sin crear una cuenta.
+ */
 // Import the DataTypes object from the sequelize library.
 const { DataTypes } = require("sequelize");
 

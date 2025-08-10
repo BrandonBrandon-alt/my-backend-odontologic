@@ -1,3 +1,8 @@
+/**
+ * Modelo Availability (disponibilidades).
+ * Representa los bloques de horario de un dentista para agendar citas,
+ * incluyendo fecha, hora de inicio y fin, especialidad y estado activo.
+ */
 // Import the DataTypes object from the sequelize library.
 const { DataTypes } = require("sequelize");
 
@@ -57,25 +62,25 @@ module.exports = (sequelize) => {
     freezeTableName: true,
     timestamps: true,
     indexes: [
-      // A compound index to quickly find all availabilities for a specific dentist on a given date.
+      // Índice compuesto para buscar rápidamente disponibilidades de un dentista en una fecha concreta
       {
         fields: ['dentist_id', 'date']
       },
-      // Index to speed up queries filtering by specialty.
+      // Índice para filtrar por especialidad
       {
         fields: ['specialty_id']
       },
-      // Index to speed up queries filtering by active status.
+      // Índice para filtrar por estado activo
       {
         fields: ['is_active']
       }
     ],
     // Custom model-level validations.
     validate: {
-      // Ensures that the end_time is always after the start_time.
+      // Garantiza que end_time siempre sea posterior a start_time
       endTimeAfterStartTime() {
         if (this.start_time && this.end_time) {
-          // A simple string comparison works for "HH:MM:SS" format.
+          // La comparación de strings funciona para formato "HH:MM:SS"
           if (this.end_time <= this.start_time) {
             throw new Error('End time must be after the start time');
           }

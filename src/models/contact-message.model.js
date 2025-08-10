@@ -1,3 +1,7 @@
+/**
+ * Modelo ContactMessage (mensajes de contacto).
+ * Almacena envíos del formulario de contacto con metadatos (IP, user agent) y estado.
+ */
 // Import the DataTypes object from the sequelize library.
 const { DataTypes } = require('sequelize');
 
@@ -63,9 +67,9 @@ module.exports = (sequelize) => {
     freezeTableName: true, // Prevents Sequelize from pluralizing the table name.
     timestamps: true,      // Automatically adds 'createdAt' and 'updatedAt' columns.
     indexes: [
-      // Index to speed up filtering messages by their status.
+      // Índice para acelerar el filtrado por estado.
       { fields: ['status'] },
-      // Index to quickly find all messages from a specific email address.
+      // Índice para buscar rápidamente por email del remitente.
       { fields: ['email'] }
     ]
   });
