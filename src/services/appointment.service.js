@@ -31,18 +31,20 @@ const createHttpError = (status, message) => {
  */
 const findFullAppointmentById = async (appointmentId) => {
   return Appointment.findByPk(appointmentId, {
+    attributes: ['id', 'status', 'notes', 'createdAt', 'user_id', 'guest_patient_id', 'availability_id', 'service_type_id'],
     include: [
-      { model: GuestPatient, as: "guestPatient" },
-      { model: User, as: "user", attributes: { exclude: ["password"] } },
+      { model: GuestPatient, as: "guestPatient", attributes: ['id', 'name', 'email', 'phone'] },
+      { model: User, as: "user", attributes: ['id', 'name', 'email', 'phone'] },
       {
         model: Availability,
         as: "availability",
+        attributes: ['id', 'date', 'start_time', 'end_time'],
         include: [
           { model: User, as: "dentist", attributes: ["id", "name"] },
-          { model: Specialty, as: "specialty" },
+          { model: Specialty, as: "specialty", attributes: ['id', 'name', 'description', 'is_active'] },
         ],
       },
-      { model: ServiceType, as: "serviceType" },
+      { model: ServiceType, as: "serviceType", attributes: ['id', 'name', 'description', 'duration', 'is_active'], include: [{ model: Specialty, as: 'specialty', attributes: ['id', 'name', 'description', 'is_active'] }] },
     ],
   });
 };
@@ -65,6 +67,7 @@ async function create(appointmentData, user = null) {
   // --- Business Logic Validation ---
   const availability = await Availability.findOne({
     where: { id: value.availability_id, is_active: true },
+    attributes: ['id'],
   });
   if (!availability) {
     throw createHttpError(
@@ -75,6 +78,7 @@ async function create(appointmentData, user = null) {
 
   const serviceType = await ServiceType.findOne({
     where: { id: value.service_type_id, is_active: true },
+    attributes: ['id'],
   });
   if (!serviceType) {
     throw createHttpError(
@@ -132,16 +136,19 @@ async function getMyAppointments(user, query = {}) {
 
   const { count, rows } = await Appointment.findAndCountAll({
     where: { user_id: user.id },
+    attributes: ['id', 'status', 'notes', 'createdAt', 'availability_id', 'service_type_id'],
     include: [
       {
         model: Availability,
         as: "availability",
+        attributes: ['id', 'date', 'start_time', 'end_time'],
         include: [{ model: User, as: "dentist", attributes: ["id", "name"] }],
       },
       {
         model: ServiceType,
         as: "serviceType",
-        include: [{ model: Specialty, as: "specialty", attributes: ["name"] }],
+        attributes: ['id', 'name', 'description', 'duration', 'is_active', 'specialty_id'],
+        include: [{ model: Specialty, as: "specialty", attributes: ["name", 'id', 'description', 'is_active'] }],
       },
     ],
     order: [["createdAt", "DESC"]],

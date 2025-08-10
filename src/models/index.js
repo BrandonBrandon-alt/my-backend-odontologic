@@ -12,7 +12,13 @@ const sequelize = new Sequelize(
   {
     host: process.env.DB_HOST,
     dialect: "postgres",
-    logging: false, // Set to console.log to see SQL queries in development.
+    logging: process.env.NODE_ENV === 'development' ? console.log : false, // Set to console.log to see SQL queries in development.
+    pool: {
+      max: parseInt(process.env.DB_POOL_MAX || '10', 10),
+      min: parseInt(process.env.DB_POOL_MIN || '0', 10),
+      acquire: parseInt(process.env.DB_POOL_ACQUIRE || '30000', 10),
+      idle: parseInt(process.env.DB_POOL_IDLE || '10000', 10),
+    },
   }
 );
 

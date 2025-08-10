@@ -1,6 +1,7 @@
 // filepath: app.js
 const express = require("express");
 const cors = require("cors");
+const compression = require("compression");
 
 // Inicializar modelos y conexión a la base de datos
 require("./models/index");
@@ -15,10 +16,13 @@ const contactRouter = require("./routers/contact.router");
 const errorHandler = require("./middleware/error.handler");
 const app = express();
 
+// Enable gzip compression
+app.use(compression());
+
 // Configuración de CORS
 app.use(
   cors({
-    origin: "http://localhost:3000",
+    origin: process.env.CORS_ORIGIN || "http://localhost:3000",
     credentials: true,
   })
 );

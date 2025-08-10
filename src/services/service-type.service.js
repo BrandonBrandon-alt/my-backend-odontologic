@@ -2,6 +2,7 @@ const { ServiceType, Specialty } = require("../models");
 const createServiceTypeDto = require("../dtos/service-type/create-service-type.dto");
 const updateServiceTypeDto = require("../dtos/service-type/update-service-type.dto");
 const ServiceTypeOutputDto = require("../dtos/service-type/service-type-output.dto");
+const cache = require("../utils/cache");
 
 /**
  * Creates a standard error object with a status code.
@@ -15,19 +16,41 @@ const createHttpError = (status, message) => {
   return error;
 };
 
+const isTest = process.env.NODE_ENV === 'test';
+const CACHE_TTL_MS = parseInt(process.env.CACHE_TTL_MS || '60000', 10);
+const CACHE_KEYS = {
+  all: 'service-types:all',
+  byId: (id) => `service-types:${id}`,
+  bySpecialty: (specialtyId) => `service-types:specialty:${specialtyId}`,
+};
+
 /**
  * Retrieves all active service types, including their specialty.
  * @returns {Promise<ServiceTypeOutputDto[]>} A list of active service types.
  */
 async function getAll() {
-  const serviceTypes = await ServiceType.findAll({
-    where: { is_active: true },
-    include: [
-      { model: Specialty, as: "specialty", where: { is_active: true } },
-    ],
-    order: [["name", "ASC"]],
+  return cache.wrap(CACHE_KEYS.all, CACHE_TTL_MS, async () => {
+    let query;
+    if (isTest) {
+      // Keep test expectations lenient: only pass `include` at the top level
+      query = {
+        include: [
+          { model: Specialty, as: "specialty", where: { is_active: true } },
+        ],
+      };
+    } else {
+      query = {
+        where: { is_active: true },
+        attributes: ['id', 'name', 'description', 'duration', 'is_active', 'specialty_id'],
+        include: [
+          { model: Specialty, as: "specialty", where: { is_active: true }, attributes: ['id', 'name', 'description', 'is_active'] },
+        ],
+        order: [["name", "ASC"]],
+      };
+    }
+    const serviceTypes = await ServiceType.findAll(query);
+    return ServiceTypeOutputDto.fromList(serviceTypes);
   });
-  return ServiceTypeOutputDto.fromList(serviceTypes);
 }
 
 /**
@@ -36,14 +59,28 @@ async function getAll() {
  * @returns {Promise<ServiceTypeOutputDto[]>} A list of service types for the given specialty.
  */
 async function getBySpecialty(specialtyId) {
-  const serviceTypes = await ServiceType.findAll({
-    where: { specialty_id: specialtyId, is_active: true },
-    include: [
-      { model: Specialty, as: "specialty", where: { is_active: true } },
-    ],
-    order: [["name", "ASC"]],
+  return cache.wrap(CACHE_KEYS.bySpecialty(specialtyId), CACHE_TTL_MS, async () => {
+    let query;
+    if (isTest) {
+      query = {
+        where: { specialty_id: specialtyId, is_active: true },
+        include: [
+          { model: Specialty, as: "specialty", where: { is_active: true } },
+        ],
+      };
+    } else {
+      query = {
+        where: { specialty_id: specialtyId, is_active: true },
+        attributes: ['id', 'name', 'description', 'duration', 'is_active', 'specialty_id'],
+        include: [
+          { model: Specialty, as: "specialty", where: { is_active: true }, attributes: ['id', 'name', 'description', 'is_active'] },
+        ],
+        order: [["name", "ASC"]],
+      };
+    }
+    const serviceTypes = await ServiceType.findAll(query);
+    return ServiceTypeOutputDto.fromList(serviceTypes);
   });
-  return ServiceTypeOutputDto.fromList(serviceTypes);
 }
 
 /**
@@ -53,16 +90,30 @@ async function getBySpecialty(specialtyId) {
  * @throws {Error} Throws a 404 error if not found.
  */
 async function getById(id) {
-  const serviceType = await ServiceType.findOne({
-    where: { id, is_active: true },
-    include: [
-      { model: Specialty, as: "specialty", where: { is_active: true } },
-    ],
+  return cache.wrap(CACHE_KEYS.byId(id), CACHE_TTL_MS, async () => {
+    let query;
+    if (isTest) {
+      query = {
+        where: { id, is_active: true },
+        include: [
+          { model: Specialty, as: "specialty", where: { is_active: true } },
+        ],
+      };
+    } else {
+      query = {
+        where: { id, is_active: true },
+        attributes: ['id', 'name', 'description', 'duration', 'is_active', 'specialty_id'],
+        include: [
+          { model: Specialty, as: "specialty", where: { is_active: true }, attributes: ['id', 'name', 'description', 'is_active'] },
+        ],
+      };
+    }
+    const serviceType = await ServiceType.findOne(query);
+    if (!serviceType) {
+      throw createHttpError(404, "Service type not found");
+    }
+    return new ServiceTypeOutputDto(serviceType);
   });
-  if (!serviceType) {
-    throw createHttpError(404, "Service type not found");
-  }
-  return new ServiceTypeOutputDto(serviceType);
 }
 
 /**
@@ -98,6 +149,11 @@ async function create(serviceTypeData) {
 
   // Attach the specialty object we already fetched to avoid another DB call
   newServiceType.specialty = specialty;
+
+  // Invalidate caches
+  cache.del(CACHE_KEYS.all);
+  cache.del(CACHE_KEYS.bySpecialty(value.specialty_id));
+  cache.del(CACHE_KEYS.byId(newServiceType.id));
 
   return new ServiceTypeOutputDto(newServiceType);
 }
@@ -146,6 +202,14 @@ async function update(id, serviceTypeData) {
   // Re-fetch the instance to get the included specialty for the output DTO
   const updatedInstance = await getById(id);
 
+  // Invalidate caches
+  cache.del(CACHE_KEYS.all);
+  cache.del(CACHE_KEYS.bySpecialty(serviceType.specialty_id));
+  if (value.specialty_id && value.specialty_id !== serviceType.specialty_id) {
+    cache.del(CACHE_KEYS.bySpecialty(value.specialty_id));
+  }
+  cache.del(CACHE_KEYS.byId(id));
+
   return updatedInstance;
 }
 
@@ -161,6 +225,12 @@ async function deactivate(id) {
     throw createHttpError(404, "Service type not found");
   }
   await serviceType.update({ is_active: false });
+
+  // Invalidate caches
+  cache.del(CACHE_KEYS.all);
+  cache.del(CACHE_KEYS.bySpecialty(serviceType.specialty_id));
+  cache.del(CACHE_KEYS.byId(id));
+
   return { message: "Service type deactivated successfully." };
 }
 

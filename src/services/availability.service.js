@@ -41,9 +41,10 @@ async function getAll() {
       is_active: true,
       ...getFutureAvailabilitiesClause(),
     },
+    attributes: ['id', 'date', 'start_time', 'end_time', 'dentist_id', 'specialty_id'],
     include: [
       { model: User, as: "dentist", attributes: ["id", "name"] },
-      { model: Specialty, as: "specialty", attributes: ["id", "name"] },
+      { model: Specialty, as: "specialty", attributes: ["id", "name", "description", "is_active"] },
     ],
     order: [
       ["date", "ASC"],
@@ -65,9 +66,10 @@ async function getBySpecialty(specialtyId) {
       is_active: true,
       ...getFutureAvailabilitiesClause(),
     },
+    attributes: ['id', 'date', 'start_time', 'end_time', 'dentist_id', 'specialty_id'],
     include: [
       { model: User, as: "dentist", attributes: ["id", "name"] },
-      { model: Specialty, as: "specialty", attributes: ["id", "name"] },
+      { model: Specialty, as: "specialty", attributes: ["id", "name", "description", "is_active"] },
     ],
     order: [
       ["date", "ASC"],
@@ -89,9 +91,10 @@ async function getByDentist(dentistId) {
       is_active: true,
       ...getFutureAvailabilitiesClause(),
     },
+    attributes: ['id', 'date', 'start_time', 'end_time', 'dentist_id', 'specialty_id'],
     include: [
       { model: User, as: "dentist", attributes: ["id", "name"] },
-      { model: Specialty, as: "specialty", attributes: ["id", "name"] },
+      { model: Specialty, as: "specialty", attributes: ["id", "name", "description", "is_active"] },
     ],
     order: [
       ["date", "ASC"],
@@ -110,9 +113,10 @@ async function getByDentist(dentistId) {
 async function getById(id) {
   const availability = await Availability.findOne({
     where: { id, is_active: true },
+    attributes: ['id', 'date', 'start_time', 'end_time', 'dentist_id', 'specialty_id'],
     include: [
       { model: User, as: "dentist", attributes: ["id", "name"] },
-      { model: Specialty, as: "specialty", attributes: ["id", "name"] },
+      { model: Specialty, as: "specialty", attributes: ["id", "name", "description", "is_active"] },
     ],
   });
   if (!availability) {
@@ -135,12 +139,14 @@ async function create(availabilityData) {
 
   const dentist = await User.findOne({
     where: { id: value.dentist_id, role: "dentist", status: "active" },
+    attributes: ['id', 'name'],
   });
   if (!dentist)
     throw createHttpError(404, "Dentist not found or is not active");
 
   const specialty = await Specialty.findOne({
     where: { id: value.specialty_id, is_active: true },
+    attributes: ['id', 'name', 'description', 'is_active'],
   });
   if (!specialty)
     throw createHttpError(404, "Specialty not found or is not active");
@@ -153,6 +159,7 @@ async function create(availabilityData) {
       start_time: { [Op.lt]: value.end_time },
       end_time: { [Op.gt]: value.start_time },
     },
+    attributes: ['id'],
   });
   if (conflictingAvailability) {
     throw createHttpError(
@@ -206,6 +213,7 @@ async function update(id, availabilityData) {
         start_time: { [Op.lt]: finalEndTime },
         end_time: { [Op.gt]: finalStartTime },
       },
+      attributes: ['id'],
     });
     if (conflictingAvailability) {
       throw createHttpError(
@@ -256,9 +264,10 @@ async function deactivate(id) {
  */
 const findFullAvailabilityById = async (id) => {
   return Availability.findByPk(id, {
+    attributes: ['id', 'date', 'start_time', 'end_time', 'dentist_id', 'specialty_id'],
     include: [
       { model: User, as: "dentist", attributes: ["id", "name"] },
-      { model: Specialty, as: "specialty", attributes: ["id", "name"] },
+      { model: Specialty, as: "specialty", attributes: ["id", "name", "description", "is_active"] },
     ],
   });
 };
