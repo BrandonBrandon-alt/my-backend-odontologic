@@ -1,5 +1,10 @@
+/**
+ * Router de disponibilidades (availability).
+ * Define rutas públicas para consulta y rutas protegidas (admin/dentista)
+ * para creación, actualización y desactivación de disponibilidades.
+ */
 const express = require("express");
-const router = express.Router();
+const router = express.Router(); // Instancia del router de Express
 const availabilityController = require("../controllers/availability.controller");
 const {
   authenticateToken,
@@ -9,6 +14,7 @@ const {
 /*
  * =================================================================
  * PUBLIC ROUTES
+ * Rutas de libre acceso para consulta
  * =================================================================
  */
 
@@ -35,10 +41,11 @@ router.get("/:id", availabilityController.getById);
 /*
  * =================================================================
  * PROTECTED ROUTES (Admin & Dentist)
+ * Rutas que requieren autenticación y rol de admin o dentista
  * =================================================================
  */
 
-// Apply authentication and role authorization middleware to all subsequent routes
+// Aplica autenticación y autorización por rol a las rutas siguientes
 router.use(authenticateToken);
 router.use(authorizeRoles("admin", "dentist"));
 

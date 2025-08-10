@@ -1,3 +1,7 @@
+/**
+ * DTO de token de refresco/acceso.
+ * Valida el formato básico de un JWT (header.payload.signature) mediante regex.
+ */
 const Joi = require('joi');
 const tokenSchema = Joi.object({
   token: Joi.string()

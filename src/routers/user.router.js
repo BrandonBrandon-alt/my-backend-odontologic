@@ -1,5 +1,9 @@
+/**
+ * Router de usuario.
+ * Define rutas de perfil y contraseña. Todas requieren autenticación previa.
+ */
 const express = require("express");
-const router = express.Router();
+const router = express.Router(); // Instancia del router de Express
 const userController = require("../controllers/user.controller");
 const { authenticateToken } = require("../middleware/auth.middleware");
 
@@ -7,10 +11,11 @@ const { authenticateToken } = require("../middleware/auth.middleware");
  * =================================================================
  * USER PROFILE ROUTES
  * All routes in this file require authentication.
+ * Rutas de perfil de usuario (todas requieren autenticación)
  * =================================================================
  */
 
-// Apply authentication middleware to all routes in this file
+// Aplica middleware de autenticación a todas las rutas de este archivo
 router.use(authenticateToken);
 
 // @route   GET /api/users/profile

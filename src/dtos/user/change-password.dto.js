@@ -1,3 +1,7 @@
+/**
+ * DTO de cambio de contraseña.
+ * Valida la contraseña actual y la nueva contraseña con reglas de complejidad.
+ */
 const Joi = require("joi");
 const passwordComplexity = require("joi-password-complexity");
 

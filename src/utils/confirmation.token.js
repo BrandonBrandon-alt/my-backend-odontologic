@@ -1,9 +1,15 @@
+/**
+ * Utilidades para tokens de confirmación de citas.
+ * - Genera un token determinista basado en datos de la cita y tiempo actual (hash SHA-256).
+ * - Verificación placeholder (debe implementarse en producción).
+ * - Genera URL de confirmación con query params `token` y `email`.
+ */
 const crypto = require("crypto");
 
 // Función para generar un token de confirmación seguro
 function generateConfirmationToken(appointmentId, patientEmail) {
-  const data = `${appointmentId}:${patientEmail}:${Date.now()}`;
-  return crypto.createHash("sha256").update(data).digest("hex");
+  const data = `${appointmentId}:${patientEmail}:${Date.now()}`; // Incluye timestamp para unicidad
+  return crypto.createHash("sha256").update(data).digest("hex"); // Hash en hexadecimal
 }
 
 // Función para verificar un token de confirmación

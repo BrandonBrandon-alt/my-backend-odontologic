@@ -1,3 +1,8 @@
+/**
+ * Modelo ServiceType (tipos de servicio).
+ * Representa procedimientos/servicios disponibles vinculados a una especialidad,
+ * con duración estimada y estado activo.
+ */
 // Import the DataTypes object from the sequelize library.
 // DataTypes is used to define the data types of the columns in the model.
 const { DataTypes } = require("sequelize");

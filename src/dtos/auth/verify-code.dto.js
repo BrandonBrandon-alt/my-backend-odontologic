@@ -1,3 +1,7 @@
+/**
+ * DTO de verificación de código (por ejemplo, activación o recuperación).
+ * Valida email y un código de 8 caracteres.
+ */
 const Joi = require('joi');
 const verifyCodeSchema = Joi.object({
   email: Joi.string().email().required().lowercase().messages({

@@ -1,8 +1,15 @@
+/**
+ * Modelo Appointment (citas).
+ * Representa una cita asociada a un usuario registrado o a un paciente invitado,
+ * enlazada a un bloque de disponibilidad y a un tipo de servicio. Incluye validaciones
+ * a nivel de modelo para garantizar reglas de negocio (exactamente un tipo de paciente).
+ */
 // Import the DataTypes object from the sequelize library.
 const { DataTypes } = require("sequelize");
 
 // Export a function that defines the model.
 module.exports = (sequelize) => {
+  // Definición del modelo y sus columnas con tipos y restricciones
   const Appointment = sequelize.define("Appointment", {
     // Defines the 'id' column, the primary key.
     id: {
@@ -73,9 +80,9 @@ module.exports = (sequelize) => {
       { fields: ['service_type_id'] },
       { fields: ['status'] }
     ],
-    // Custom model-level validations to enforce business rules.
+    // Validaciones a nivel de modelo para reglas de negocio
     validate: {
-      // Ensures that an appointment has exactly one type of patient associated with it.
+      // Asegura que exista exactamente un tipo de paciente asociado (usuario o invitado, no ambos)
       hasOnePatientType() {
         if ((this.user_id && this.guest_patient_id) || (!this.user_id && !this.guest_patient_id)) {
           throw new Error('Appointment must have either a user_id or a guest_patient_id, but not both.');

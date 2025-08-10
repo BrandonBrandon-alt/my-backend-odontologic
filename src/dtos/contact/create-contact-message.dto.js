@@ -1,3 +1,9 @@
+/**
+ * DTO de creación de mensaje de contacto.
+ * Valida nombre, email, teléfono (opcional), asunto controlado y mensaje.
+ * Nota: Al final se referencia `contactSchema` pero el esquema definido se llama
+ * `createContactMessageSchema`. Esto podría ser un error de referencia.
+ */
 // File: dtos/create-contact-message.dto.js
 
 const Joi = require("joi");
@@ -50,6 +56,7 @@ const createContactMessageSchema = Joi.object({
 });
 
 const validateContactData = (data) => {
+  // Posible error: `contactSchema` no está definido; quizá se quiso usar `createContactMessageSchema`.
   return contactSchema.validate(data, { abortEarly: false });
 };
 

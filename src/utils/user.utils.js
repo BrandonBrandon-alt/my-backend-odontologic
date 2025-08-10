@@ -1,3 +1,8 @@
+/**
+ * Utilidades de usuario.
+ * Proporciona un helper para sanitizar un modelo de usuario de Sequelize
+ * removiendo campos sensibles antes de responder en la API.
+ */
 // src/utils/user-utils.js
 
 /**
@@ -24,7 +29,7 @@ function sanitizeUser(user) {
     ...safeUser
   } = plainUser;
 
-  return safeUser;
+  return safeUser; // Devuelve el objeto sin campos sensibles
 }
 
 module.exports = {

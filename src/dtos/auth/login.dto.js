@@ -1,3 +1,7 @@
+/**
+ * DTO de login.
+ * Valida credenciales básicas: email y contraseña.
+ */
 const Joi = require('joi');
 const loginSchema = Joi.object({
   email: Joi.string().email().required().lowercase().messages({

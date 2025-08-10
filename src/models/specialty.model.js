@@ -1,4 +1,8 @@
-// specialty.model.js
+/**
+ * specialty.model.js
+ * Modelo Specialty (especialidades).
+ * Define especialidades odontológicas con nombre, descripción y estado activo.
+ */
 
 // Import the DataTypes object from the sequelize library.
 const { DataTypes } = require("sequelize");

@@ -1,3 +1,7 @@
+/**
+ * DTO de actualización de especialidad.
+ * Todos los campos son opcionales; valida nombre y descripción si se proporcionan.
+ */
 const Joi = require('joi');
 
 // Joi schema to validate the data for updating a specialty.

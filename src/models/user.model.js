@@ -1,3 +1,8 @@
+/**
+ * Modelo User (usuarios).
+ * Representa a los usuarios del sistema con datos personales, credenciales,
+ * rol y estados de cuenta, incluyendo campos de activación y recuperación de contraseña.
+ */
 // Import the DataTypes object from the sequelize library.
 const { DataTypes } = require("sequelize");
 

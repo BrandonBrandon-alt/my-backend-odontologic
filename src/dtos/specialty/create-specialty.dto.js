@@ -1,3 +1,7 @@
+/**
+ * DTO de creación de especialidad.
+ * Valida nombre requerido (2-100) y descripción opcional.
+ */
 // File: dtos/create-specialty.dto.js
 
 const Joi = require('joi');

@@ -1,3 +1,8 @@
+/**
+ * DTO de actualización de disponibilidad.
+ * Todos los campos son opcionales; incluye validación de formato HH:MM:SS
+ * y verificación personalizada de fin > inicio cuando ambos están presentes.
+ */
 const Joi = require("joi");
 
 // Esquema de Joi para validar la actualización de un slot de disponibilidad.

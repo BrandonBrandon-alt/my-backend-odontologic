@@ -1,5 +1,10 @@
+/**
+ * Router de tipos de servicio (ServiceType).
+ * Define rutas públicas para consulta y rutas protegidas exclusivas de admin
+ * para crear, actualizar y desactivar tipos de servicio.
+ */
 const express = require("express");
-const router = express.Router();
+const router = express.Router(); // Instancia del router de Express
 const serviceTypeController = require("../controllers/service-type.controller");
 const {
   authenticateToken,
@@ -9,6 +14,7 @@ const {
 /*
  * =================================================================
  * PUBLIC ROUTES
+ * Rutas de libre acceso para consulta
  * =================================================================
  */
 
@@ -30,10 +36,11 @@ router.get("/:id", serviceTypeController.getById);
 /*
  * =================================================================
  * PROTECTED ROUTES (Admin Only)
+ * Rutas que requieren autenticación y rol admin
  * =================================================================
  */
 
-// Apply authentication and role authorization middleware to all subsequent routes
+// Aplica autenticación y autorización (solo admin) a las rutas siguientes
 router.use(authenticateToken);
 router.use(authorizeRoles("admin"));
 

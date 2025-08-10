@@ -1,3 +1,7 @@
+/**
+ * DTO de actualización de tipo de servicio.
+ * Todos los campos son opcionales; valida nombre, descripción, duración mínima y especialidad.
+ */
 const Joi = require('joi');
 
 // Joi schema to validate the data for updating a service type.

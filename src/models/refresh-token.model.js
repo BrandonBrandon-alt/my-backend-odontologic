@@ -1,3 +1,8 @@
+/**
+ * Modelo RefreshToken.
+ * Almacena tokens de refresco para emitir nuevos tokens de acceso, con fecha de expiración
+ * y relación con el usuario propietario.
+ */
 // Import the Model and DataTypes classes from the sequelize library.
 const { Model, DataTypes } = require('sequelize');
 

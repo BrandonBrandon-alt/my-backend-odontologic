@@ -1,4 +1,10 @@
 // src/middleware/recaptcha.middleware.js
+/**
+ * Middleware de verificación reCAPTCHA v3.
+ * - Extrae el token `recaptchaToken` del cuerpo de la petición.
+ * - Verifica el token contra la API de Google mediante el servicio.
+ * - Aplica un umbral de score (0.5) recomendado por Google.
+ */
 const recaptchaService = require("../services/recaptcha.service");
 
 const recaptchaMiddleware = async (req, res, next) => {

@@ -1,3 +1,10 @@
+/**
+ * Inicialización de Sequelize y carga de modelos/relaciones.
+ * - Crea una instancia centralizada de Sequelize usando variables de entorno.
+ * - Registra todos los modelos disponibles en `src/models`.
+ * - Define asociaciones entre modelos (1:N, N:M) con alias consistentes.
+ * - Exporta la instancia `sequelize` y todos los modelos.
+ */
 'use strict';
 
 require("dotenv").config();
@@ -14,10 +21,10 @@ const sequelize = new Sequelize(
     dialect: "postgres",
     logging: process.env.NODE_ENV === 'development' ? console.log : false, // Set to console.log to see SQL queries in development.
     pool: {
-      max: parseInt(process.env.DB_POOL_MAX || '10', 10),
-      min: parseInt(process.env.DB_POOL_MIN || '0', 10),
-      acquire: parseInt(process.env.DB_POOL_ACQUIRE || '30000', 10),
-      idle: parseInt(process.env.DB_POOL_IDLE || '10000', 10),
+      max: parseInt(process.env.DB_POOL_MAX || '10', 10), // Máximo de conexiones en el pool
+      min: parseInt(process.env.DB_POOL_MIN || '0', 10),  // Mínimo de conexiones en el pool
+      acquire: parseInt(process.env.DB_POOL_ACQUIRE || '30000', 10), // Tiempo máx. de espera
+      idle: parseInt(process.env.DB_POOL_IDLE || '10000', 10), // Tiempo de inactividad antes de liberar
     },
   }
 );
