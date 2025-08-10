@@ -1,3 +1,7 @@
+/**
+ * DTO de actualización de estado de una cita.
+ * Restringe el campo `status` a un conjunto controlado de valores.
+ */
 // File: dtos/update-appointment-status.dto.js
 
 const Joi = require("joi");

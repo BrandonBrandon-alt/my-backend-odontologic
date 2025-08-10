@@ -1,3 +1,8 @@
+/**
+ * DTO de actualización de perfil de usuario.
+ * Todos los campos son opcionales; valida nombre, teléfono (10 dígitos),
+ * dirección y fecha de nacimiento en formato ISO.
+ */
 // File: dtos/update-profile.dto.js
 
 const Joi = require('joi');

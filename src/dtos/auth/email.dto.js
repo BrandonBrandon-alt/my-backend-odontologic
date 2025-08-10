@@ -1,3 +1,7 @@
+/**
+ * DTO reutilizable para validar un email.
+ * Útil en múltiples flujos (activación, recuperación, etc.).
+ */
 // File: dtos/auth/email.dto.js (Reusable for multiple actions)
 const Joi = require('joi');
 const emailSchema = Joi.object({
@@ -7,4 +11,3 @@ const emailSchema = Joi.object({
   })
 });
 module.exports = emailSchema;
-2

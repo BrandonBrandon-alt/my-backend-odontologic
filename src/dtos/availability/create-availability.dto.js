@@ -1,3 +1,8 @@
+/**
+ * DTO de creación de disponibilidad.
+ * Valida dentista, especialidad, fecha futura y horas con formato HH:MM:SS,
+ * además de una validación personalizada para asegurar que fin > inicio.
+ */
 const Joi = require("joi");
 
 // Joi schema to validate the data for creating a new availability slot.

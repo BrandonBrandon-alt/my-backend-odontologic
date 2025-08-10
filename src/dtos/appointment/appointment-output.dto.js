@@ -1,3 +1,9 @@
+/**
+ * DTO de salida de Cita (AppointmentOutputDto).
+ * - Formatea los datos de una cita antes de enviarlos al cliente.
+ * - Incluye información del paciente (usuario registrado o invitado),
+ *   así como la disponibilidad y el tipo de servicio usando sus propios DTOs.
+ */
 // This DTO depends on other output DTOs to format nested data.
 const ServiceTypeOutputDto = require("../service-type/service-type-output.dto");
 const AvailabilityOutputDto = require("../availability/availability-output.dto");
@@ -17,12 +23,13 @@ class PatientOutputDto {
  */
 class AppointmentOutputDto {
   constructor(appointmentModel) {
+    // Campos básicos de la cita
     this.id = appointmentModel.id;
     this.status = appointmentModel.status;
     this.notes = appointmentModel.notes;
     this.createdAt = appointmentModel.createdAt;
 
-    // Determine the patient type and format accordingly.
+    // Determina el tipo de paciente y lo formatea
     if (appointmentModel.user) {
       this.patient = new PatientOutputDto(appointmentModel.user);
       this.patientType = "registered";
@@ -31,7 +38,7 @@ class AppointmentOutputDto {
       this.patientType = "guest";
     }
 
-    // Format the nested availability and service type using their own DTOs.
+    // Formatea disponibilidad anidada (simplificada en este contexto)
     if (appointmentModel.availability) {
       // Note: We use a simplified availability output here for brevity in the appointment context.
       // A full AvailabilityOutputDto could be used if more detail is needed.
@@ -49,6 +56,7 @@ class AppointmentOutputDto {
       };
     }
 
+    // Tipo de servicio anidado usando su propio DTO
     if (appointmentModel.serviceType) {
       this.serviceType = new ServiceTypeOutputDto(appointmentModel.serviceType);
     }

@@ -1,3 +1,7 @@
+/**
+ * DTO de creación de tipo de servicio.
+ * Valida nombre, descripción opcional, duración mínima y especialidad asociada.
+ */
 const Joi = require('joi');
 
 // Joi schema to validate the data for creating a new service type.

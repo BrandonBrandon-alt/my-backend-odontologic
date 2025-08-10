@@ -1,3 +1,8 @@
+/**
+ * DTO de restablecimiento de contraseña.
+ * Valida el código de restablecimiento (8 caracteres) y la nueva contraseña
+ * con las mismas reglas de complejidad del registro.
+ */
 const Joi = require('joi');
 const passwordComplexity = require('joi-password-complexity');
 

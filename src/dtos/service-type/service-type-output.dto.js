@@ -1,3 +1,8 @@
+/**
+ * DTO de salida de Tipo de Servicio (ServiceTypeOutputDto).
+ * - Formatea los datos del tipo de servicio para el cliente.
+ * - Incluye la especialidad anidada si fue cargada en la consulta.
+ */
 const SpecialtyOutputDto = require("../specialty/specialty-output.dto");
 
 /**
@@ -12,18 +17,16 @@ class ServiceTypeOutputDto {
     this.duration = serviceTypeModel.duration;
     this.isActive = serviceTypeModel.is_active;
 
-    // If 'specialty' was included in the query and is not null,
-    // format it using its own DTO.
+    // Si la especialidad viene incluida, formatearla con su propio DTO
     if (serviceTypeModel.specialty) {
       this.specialty = new SpecialtyOutputDto(serviceTypeModel.specialty);
     }
   }
 
   /**
-   * A static helper method to convert a list of ServiceType model instances
-   * into a list of DTOs.
-   * @param {Array<ServiceType>} serviceTypesList - An array of Sequelize service type models.
-   * @returns {Array<ServiceTypeOutputDto>} A list of formatted service type objects.
+   * Convierte una lista de modelos ServiceType en una lista de DTOs.
+   * @param {Array<ServiceType>} serviceTypesList
+   * @returns {Array<ServiceTypeOutputDto>}
    */
   static fromList(serviceTypesList) {
     return serviceTypesList.map((st) => new ServiceTypeOutputDto(st));

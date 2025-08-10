@@ -1,3 +1,8 @@
+/**
+ * DTO de registro de usuario.
+ * Valida datos personales y credenciales, incluyendo complejidad de contraseña
+ * y un token de reCAPTCHA para mitigar abuso automatizado.
+ */
 // File: dtos/auth/register.dto.js
 const Joi = require('joi');
 const passwordComplexity = require('joi-password-complexity');
