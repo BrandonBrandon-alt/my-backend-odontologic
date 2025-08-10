@@ -1,80 +1,37 @@
-const express = require('express');
+// src/routers/auth.router.js
+
+const express = require("express");
 const router = express.Router();
-const authController = require('../controllers/auth.controller');
-// Assuming you have a recaptcha middleware
-// const recaptchaMiddleware = require('../middleware/recaptcha.middleware');
+const authController = require("../controllers/auth.controller");
+const { authenticateToken } = require("../middleware/auth.middleware");
+
+// ✅ Importación correcta del middleware de reCAPTCHA
+const recaptchaMiddleware = require("../middleware/recaptcha.middleware");
 
 /*
-* =================================================================
-* ACCOUNT REGISTRATION & LOGIN
-* =================================================================
-*/
+ * =================================================================
+ * AUTHENTICATION & REGISTRATION
+ * =================================================================
+ */
 
-// @route   POST /api/auth/register
-// @desc    Register a new user
-// @access  Public
-router.post("/register", /* recaptchaMiddleware, */ authController.register);
+// ✅ Rutas usando el middleware correctamente
+router.post("/register", recaptchaMiddleware, authController.register);
+router.post("/login", recaptchaMiddleware, authController.login);
 
-// @route   POST /api/auth/login
-// @desc    Log in a user
-// @access  Public
-router.post("/login", /* recaptchaMiddleware, */ authController.login);
-
-
-/*
-* =================================================================
-* ACCOUNT ACTIVATION
-* =================================================================
-*/
-
-// @route   POST /api/auth/activate
-// @desc    Activate a user account with a code
-// @access  Public
-router.post("/activate", authController.activateAccount);
-
-// @route   POST /api/auth/resend-activation
-// @desc    Resend the activation code
-// @access  Public
-router.post("/resend-activation", authController.resendActivationCode);
-
-
-/*
-* =================================================================
-* PASSWORD RECOVERY
-* =================================================================
-*/
-
-// @route   POST /api/auth/password/request-reset
-// @desc    Request a password reset code
-// @access  Public
-router.post("/password/request-reset", authController.requestPasswordReset);
-
-// @route   POST /api/auth/password/verify-code
-// @desc    Verify a password reset code
-// @access  Public
-router.post("/password/verify-code", authController.verifyResetCode);
-
-// @route   POST /api/auth/password/reset
-// @desc    Reset the password with a valid code
-// @access  Public
-router.post("/password/reset", authController.resetPassword);
-
-
-/*
-* =================================================================
-* SESSION MANAGEMENT (TOKENS)
-* =================================================================
-*/
-
-// @route   POST /api/auth/token/refresh
-// @desc    Get a new access token using a refresh token
-// @access  Public
+// --- El resto de tus rutas no necesitan reCAPTCHA ---
+router.post("/logout", authenticateToken, authController.logout);
 router.post("/token/refresh", authController.refreshToken);
+router.get("/verify", authenticateToken, authController.verifyToken);
 
-// @route   POST /api/auth/logout
-// @desc    Log out by invalidating the refresh token
-// @access  Public
-router.post("/logout", authController.logout);
-
+/*
+ * =================================================================
+ * ACCOUNT ACTIVATION & PASSWORD
+ * =================================================================
+ */
+router.post("/activate", authController.activateAccount);
+router.post("/resend-activation", authController.resendActivationCode);
+router.post("/password/forgot-password", authController.requestPasswordReset);
+router.post("/password/reset-password", authController.resetPassword);
+router.post("/password/verify-code", authController.verifyResetCode);
 
 module.exports = router;

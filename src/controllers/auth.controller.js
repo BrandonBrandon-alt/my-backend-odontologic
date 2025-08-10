@@ -33,20 +33,16 @@ const activateAccount = asyncHandler(async (req, res, next) => {
 
 const resendActivationCode = asyncHandler(async (req, res, next) => {
   await authService.resendActivationCode(req.body);
-  res
-    .status(200)
-    .json({
-      message: "Activation code has been resent. Please check your email.",
-    });
+  res.status(200).json({
+    message: "Activation code has been resent. Please check your email.",
+  });
 });
 
 const requestPasswordReset = asyncHandler(async (req, res, next) => {
   await authService.requestPasswordReset(req.body);
-  res
-    .status(200)
-    .json({
-      message: "Password reset instructions have been sent to your email.",
-    });
+  res.status(200).json({
+    message: "Password reset instructions have been sent to your email.",
+  });
 });
 
 const resetPassword = asyncHandler(async (req, res, next) => {
@@ -73,6 +69,15 @@ const logout = asyncHandler(async (req, res, next) => {
   res.status(204).send(); // 204 No Content is appropriate for a successful logout
 });
 
+const verifyToken = asyncHandler(async (req, res, next) => {
+  // The 'authenticateToken' middleware has already run and attached the payload to req.user
+  const user = await authService.verifyToken(req.user.id);
+  res.status(200).json({
+    message: "Token is valid.",
+    user,
+  });
+});
+
 module.exports = {
   register,
   activateAccount,
@@ -83,4 +88,5 @@ module.exports = {
   requestPasswordReset,
   resetPassword,
   verifyResetCode,
+  verifyToken,
 };

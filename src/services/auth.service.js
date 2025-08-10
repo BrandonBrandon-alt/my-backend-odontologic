@@ -248,6 +248,23 @@ async function resetPassword(data) {
 }
 
 /**
+ * Verifies a user's session by finding them in the database.
+ * @param {number} userId - The ID of the user from the decoded JWT.
+ * @returns {object} The sanitized user object.
+ */
+async function verifyToken(userId) {
+  const user = await User.findByPk(userId);
+  if (!user) {
+    // If the token is valid but the user doesn't exist, something is wrong (e.g., user was deleted).
+    throw createHttpError(
+      404,
+      "User associated with this token no longer exists."
+    );
+  }
+  return sanitizeUser(user);
+}
+
+/**
  * Verifies if a password reset code is valid.
  */
 async function verifyResetCode(data) {
@@ -278,4 +295,5 @@ module.exports = {
   requestPasswordReset,
   resetPassword,
   verifyResetCode,
+  verifyToken,
 };
