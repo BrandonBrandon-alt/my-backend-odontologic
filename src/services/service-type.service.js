@@ -1,3 +1,8 @@
+/**
+ * Servicio de tipos de servicio (ServiceType).
+ * Permite consultar, crear, actualizar y desactivar tipos de servicio,
+ * empleando caché para optimizar lecturas y DTOs para validaciones y salidas.
+ */
 const { ServiceType, Specialty } = require("../models");
 const createServiceTypeDto = require("../dtos/service-type/create-service-type.dto");
 const updateServiceTypeDto = require("../dtos/service-type/update-service-type.dto");
@@ -5,10 +10,10 @@ const ServiceTypeOutputDto = require("../dtos/service-type/service-type-output.d
 const cache = require("../utils/cache");
 
 /**
- * Creates a standard error object with a status code.
- * @param {number} status - The HTTP status code.
- * @param {string} message - The error message.
- * @returns {Error} A new error object with a status property.
+ * Crea un error HTTP estándar con código de estado.
+ * @param {number} status - Código de estado HTTP.
+ * @param {string} message - Mensaje del error.
+ * @returns {Error} Error con propiedad `status`.
  */
 const createHttpError = (status, message) => {
   const error = new Error(message);
@@ -16,23 +21,24 @@ const createHttpError = (status, message) => {
   return error;
 };
 
-const isTest = process.env.NODE_ENV === 'test';
-const CACHE_TTL_MS = parseInt(process.env.CACHE_TTL_MS || '60000', 10);
+const isTest = process.env.NODE_ENV === 'test'; // Modo test altera algunas consultas para tests más permisivos
+const CACHE_TTL_MS = parseInt(process.env.CACHE_TTL_MS || '60000', 10); // TTL por defecto 60s
 const CACHE_KEYS = {
-  all: 'service-types:all',
-  byId: (id) => `service-types:${id}`,
-  bySpecialty: (specialtyId) => `service-types:specialty:${specialtyId}`,
+  all: 'service-types:all', // Clave para todos los tipos de servicio
+  byId: (id) => `service-types:${id}`, // Clave por ID
+  bySpecialty: (specialtyId) => `service-types:specialty:${specialtyId}`, // Clave por especialidad
 };
 
 /**
- * Retrieves all active service types, including their specialty.
- * @returns {Promise<ServiceTypeOutputDto[]>} A list of active service types.
+ * Obtiene todos los tipos de servicio activos, incluyendo su especialidad.
+ * Utiliza caché para mejorar el rendimiento.
+ * @returns {Promise<ServiceTypeOutputDto[]>} Lista de tipos de servicio.
  */
 async function getAll() {
   return cache.wrap(CACHE_KEYS.all, CACHE_TTL_MS, async () => {
     let query;
     if (isTest) {
-      // Keep test expectations lenient: only pass `include` at the top level
+      // En modo test, se mantiene la expectativa de incluir solo al nivel superior
       query = {
         include: [
           { model: Specialty, as: "specialty", where: { is_active: true } },
@@ -54,9 +60,10 @@ async function getAll() {
 }
 
 /**
- * Retrieves all active service types for a specific specialty.
- * @param {number} specialtyId - The ID of the specialty.
- * @returns {Promise<ServiceTypeOutputDto[]>} A list of service types for the given specialty.
+ * Obtiene todos los tipos de servicio activos para una especialidad dada.
+ * Utiliza caché para evitar recalcular resultados frecuentes.
+ * @param {number} specialtyId - ID de la especialidad.
+ * @returns {Promise<ServiceTypeOutputDto[]>}
  */
 async function getBySpecialty(specialtyId) {
   return cache.wrap(CACHE_KEYS.bySpecialty(specialtyId), CACHE_TTL_MS, async () => {
@@ -84,10 +91,11 @@ async function getBySpecialty(specialtyId) {
 }
 
 /**
- * Retrieves a single active service type by its ID, including its specialty.
- * @param {number} id - The ID of the service type.
- * @returns {Promise<ServiceTypeOutputDto>} The service type object.
- * @throws {Error} Throws a 404 error if not found.
+ * Obtiene un tipo de servicio activo por su ID, incluyendo su especialidad.
+ * Utiliza caché para acelerar lecturas repetidas.
+ * @param {number} id - ID del tipo de servicio.
+ * @returns {Promise<ServiceTypeOutputDto>}
+ * @throws {Error} 404 si no se encuentra.
  */
 async function getById(id) {
   return cache.wrap(CACHE_KEYS.byId(id), CACHE_TTL_MS, async () => {
@@ -117,24 +125,27 @@ async function getById(id) {
 }
 
 /**
- * Creates a new service type after validating the input and checking for duplicates.
- * @param {object} serviceTypeData - The data for the new service type.
- * @returns {Promise<ServiceTypeOutputDto>} The newly created service type.
- * @throws {Error} Throws validation, not found, or conflict errors.
+ * Crea un nuevo tipo de servicio después de validar la entrada y comprobar duplicados.
+ * - Verifica existencia de especialidad.
+ * - Garantiza unicidad del nombre dentro de la misma especialidad.
+ * - Invalida las entradas de caché relacionadas.
+ * @param {object} serviceTypeData - Datos del tipo de servicio.
+ * @returns {Promise<ServiceTypeOutputDto>}
  */
 async function create(serviceTypeData) {
-  const { error, value } = createServiceTypeDto.validate(serviceTypeData);
+  const { error, value } = createServiceTypeDto.validate(serviceTypeData); // Valida entrada
   if (error) {
     throw createHttpError(400, error.details[0].message);
   }
 
   const specialty = await Specialty.findOne({
-    where: { id: value.specialty_id, is_active: true },
+    where: { id: value.specialty_id, is_active: true }, // Especialidad debe existir y estar activa
   });
   if (!specialty) {
     throw createHttpError(404, "Specialty not found");
   }
 
+  // Evitar duplicados por nombre dentro de la misma especialidad
   const existingServiceType = await ServiceType.findOne({
     where: { name: value.name, specialty_id: value.specialty_id },
   });
@@ -147,10 +158,10 @@ async function create(serviceTypeData) {
 
   const newServiceType = await ServiceType.create(value);
 
-  // Attach the specialty object we already fetched to avoid another DB call
+  // Adjunta la especialidad ya recuperada para evitar otra consulta
   newServiceType.specialty = specialty;
 
-  // Invalidate caches
+  // Invalidar cachés relacionadas para reflejar el nuevo dato
   cache.del(CACHE_KEYS.all);
   cache.del(CACHE_KEYS.bySpecialty(value.specialty_id));
   cache.del(CACHE_KEYS.byId(newServiceType.id));
@@ -159,14 +170,17 @@ async function create(serviceTypeData) {
 }
 
 /**
- * Updates an existing service type.
- * @param {number} id - The ID of the service type to update.
- * @param {object} serviceTypeData - The new data for the service type.
- * @returns {Promise<ServiceTypeOutputDto>} The updated service type.
- * @throws {Error} Throws validation, not found, or conflict errors.
+ * Actualiza un tipo de servicio existente.
+ * - Valida el DTO.
+ * - Verifica existencia.
+ * - Comprueba conflictos de nombre dentro de la especialidad de destino.
+ * - Invalida cachés relacionadas tras actualizar.
+ * @param {number} id - ID del tipo de servicio.
+ * @param {object} serviceTypeData - Datos a actualizar.
+ * @returns {Promise<ServiceTypeOutputDto>}
  */
 async function update(id, serviceTypeData) {
-  const { error, value } = updateServiceTypeDto.validate(serviceTypeData);
+  const { error, value } = updateServiceTypeDto.validate(serviceTypeData); // Valida entrada
   if (error) {
     throw createHttpError(400, error.details[0].message);
   }
@@ -176,7 +190,7 @@ async function update(id, serviceTypeData) {
     throw createHttpError(404, "Service type not found");
   }
 
-  // If specialty is being changed, ensure the new one exists.
+  // Si cambia la especialidad, verificar que exista
   if (value.specialty_id) {
     const specialty = await Specialty.findByPk(value.specialty_id);
     if (!specialty) {
@@ -184,9 +198,11 @@ async function update(id, serviceTypeData) {
     }
   }
 
+  // Determinar valores finales para validar duplicidad
   const finalName = value.name || serviceType.name;
   const finalSpecialtyId = value.specialty_id || serviceType.specialty_id;
 
+  // Verificar duplicidad nombre+especialidad (excluyendo el mismo registro)
   const existingServiceType = await ServiceType.findOne({
     where: { name: finalName, specialty_id: finalSpecialtyId },
   });
@@ -197,12 +213,12 @@ async function update(id, serviceTypeData) {
     );
   }
 
-  await serviceType.update(value);
+  await serviceType.update(value); // Persiste cambios
 
-  // Re-fetch the instance to get the included specialty for the output DTO
+  // Reobtiene con includes para el DTO de salida coherente
   const updatedInstance = await getById(id);
 
-  // Invalidate caches
+  // Invalidar cachés relacionadas
   cache.del(CACHE_KEYS.all);
   cache.del(CACHE_KEYS.bySpecialty(serviceType.specialty_id));
   if (value.specialty_id && value.specialty_id !== serviceType.specialty_id) {
@@ -214,10 +230,10 @@ async function update(id, serviceTypeData) {
 }
 
 /**
- * Deactivates a service type (soft delete).
- * @param {number} id - The ID of the service type to deactivate.
- * @returns {Promise<{message: string}>} A success message.
- * @throws {Error} Throws a 404 error if not found.
+ * Desactiva (soft delete) un tipo de servicio.
+ * - Invalida entradas de caché relevantes.
+ * @param {number} id - ID del tipo de servicio a desactivar.
+ * @returns {Promise<{message: string}>}
  */
 async function deactivate(id) {
   const serviceType = await ServiceType.findByPk(id);
@@ -226,7 +242,7 @@ async function deactivate(id) {
   }
   await serviceType.update({ is_active: false });
 
-  // Invalidate caches
+  // Invalidar caché tras el cambio de estado
   cache.del(CACHE_KEYS.all);
   cache.del(CACHE_KEYS.bySpecialty(serviceType.specialty_id));
   cache.del(CACHE_KEYS.byId(id));

@@ -1,3 +1,9 @@
+/**
+ * Servicio de gestión de citas (appointments).
+ * Proporciona funciones para crear citas (para invitados o usuarios registrados),
+ * listar las citas del usuario autenticado con paginación y actualizar el estado de una cita.
+ * Utiliza Sequelize para consultas y transacciones, y DTOs para validación y salida.
+ */
 const {
   Appointment,
   GuestPatient,
@@ -13,10 +19,10 @@ const updateAppointmentStatusDto = require("../dtos/appointment/update-appointme
 const AppointmentOutputDto = require("../dtos//appointment/appointment-output.dto");
 
 /**
- * Creates a standard error object with a status code.
- * @param {number} status - The HTTP status code.
- * @param {string} message - The error message.
- * @returns {Error} A new error object with a status property.
+ * Crea un objeto de error HTTP con un código de estado.
+ * @param {number} status - Código de estado HTTP.
+ * @param {string} message - Mensaje descriptivo del error.
+ * @returns {Error} Error con propiedad `status` asignada.
  */
 const createHttpError = (status, message) => {
   const error = new Error(message);
@@ -25,48 +31,59 @@ const createHttpError = (status, message) => {
 };
 
 /**
- * Fetches an appointment by its ID and includes all related data for output.
- * @param {number} appointmentId - The ID of the appointment.
- * @returns {Promise<Appointment>} A Sequelize appointment object with includes.
+ * Obtiene una cita por su ID incluyendo todas las relaciones necesarias para la salida.
+ * @param {number} appointmentId - ID de la cita.
+ * @returns {Promise<Appointment>} Objeto de cita de Sequelize con sus relaciones incluidas.
  */
 const findFullAppointmentById = async (appointmentId) => {
+  // Se seleccionan atributos específicos para optimizar la respuesta y evitar datos innecesarios
   return Appointment.findByPk(appointmentId, {
     attributes: ['id', 'status', 'notes', 'createdAt', 'user_id', 'guest_patient_id', 'availability_id', 'service_type_id'],
     include: [
+      // Incluye información del paciente invitado (si aplica)
       { model: GuestPatient, as: "guestPatient", attributes: ['id', 'name', 'email', 'phone'] },
+      // Incluye información del usuario (si aplica)
       { model: User, as: "user", attributes: ['id', 'name', 'email', 'phone'] },
       {
         model: Availability,
         as: "availability",
         attributes: ['id', 'date', 'start_time', 'end_time'],
         include: [
+          // Dentista asociado al horario de disponibilidad
           { model: User, as: "dentist", attributes: ["id", "name"] },
+          // Especialidad asociada a la disponibilidad
           { model: Specialty, as: "specialty", attributes: ['id', 'name', 'description', 'is_active'] },
         ],
       },
+      // Tipo de servicio solicitado (incluye su especialidad)
       { model: ServiceType, as: "serviceType", attributes: ['id', 'name', 'description', 'duration', 'is_active'], include: [{ model: Specialty, as: 'specialty', attributes: ['id', 'name', 'description', 'is_active'] }] },
     ],
   });
 };
 
 /**
- * Creates a new appointment for either a guest or a registered user.
- * @param {object} appointmentData - The data for the new appointment.
- * @param {object} [user] - The authenticated user object, if applicable.
- * @returns {Promise<AppointmentOutputDto>} The newly created appointment.
+ * Crea una nueva cita para un invitado o un usuario registrado.
+ * - Valida la entrada con el DTO adecuado según si es invitado o usuario.
+ * - Verifica que la disponibilidad y el tipo de servicio estén activos.
+ * - Si es invitado, crea o reutiliza un registro de `GuestPatient` por email.
+ * - Crea la cita dentro de una transacción para asegurar consistencia.
+ * @param {object} appointmentData - Datos de la nueva cita.
+ * @param {object} [user=null] - Usuario autenticado (si existe). Si es null, se considera invitado.
+ * @returns {Promise<AppointmentOutputDto>} La cita creada en formato de salida.
  */
 async function create(appointmentData, user = null) {
-  const isGuest = !user;
-  const schema = isGuest ? createGuestAppointmentDto : createUserAppointmentDto;
+  const isGuest = !user; // Determina si la creación es para un invitado (no autenticado)
+  const schema = isGuest ? createGuestAppointmentDto : createUserAppointmentDto; // Selecciona el esquema de validación adecuado
 
-  const { error, value } = schema.validate(appointmentData);
+  const { error, value } = schema.validate(appointmentData); // Valida los datos de entrada
   if (error) {
+    // Si la validación falla, se lanza un error 400 con el detalle
     throw createHttpError(400, error.details[0].message);
   }
 
-  // --- Business Logic Validation ---
+  // --- Validación de reglas de negocio ---
   const availability = await Availability.findOne({
-    where: { id: value.availability_id, is_active: true },
+    where: { id: value.availability_id, is_active: true }, // La disponibilidad debe existir y estar activa
     attributes: ['id'],
   });
   if (!availability) {
@@ -77,7 +94,7 @@ async function create(appointmentData, user = null) {
   }
 
   const serviceType = await ServiceType.findOne({
-    where: { id: value.service_type_id, is_active: true },
+    where: { id: value.service_type_id, is_active: true }, // El tipo de servicio debe existir y estar activo
     attributes: ['id'],
   });
   if (!serviceType) {
@@ -86,13 +103,15 @@ async function create(appointmentData, user = null) {
       "The selected service type was not found or is not active."
     );
   }
-  // --- End Validation ---
+  // --- Fin de validación ---
 
+  // Se utiliza una transacción para garantizar que la creación del invitado (si aplica)
+  // y la creación de la cita sean atómicas (todas o ninguna)
   const result = await sequelize.transaction(async (t) => {
-    let guestPatientId = null;
+    let guestPatientId = null; // ID del paciente invitado, si corresponde
 
     if (isGuest) {
-      // Find an existing guest by email or create a new one if not found.
+      // Busca un invitado existente por email o crea uno nuevo si no existe
       const [guest] = await GuestPatient.findOrCreate({
         where: { email: value.email },
         defaults: {
@@ -100,96 +119,104 @@ async function create(appointmentData, user = null) {
           phone: value.phone,
           email: value.email,
         },
-        transaction: t,
+        transaction: t, // Asegura que la operación esté dentro de la transacción
       });
-      guestPatientId = guest.id;
+      guestPatientId = guest.id; // Guarda el ID del invitado para asociarlo a la cita
     }
 
+    // Crea la cita con estado inicial "pending"
     const newAppointment = await Appointment.create(
       {
-        user_id: isGuest ? null : user.id,
-        guest_patient_id: guestPatientId,
-        availability_id: value.availability_id,
-        service_type_id: value.service_type_id,
-        notes: value.notes,
-        status: "pending",
+        user_id: isGuest ? null : user.id, // Si es invitado, no hay user_id
+        guest_patient_id: guestPatientId, // Si no es invitado, queda en null
+        availability_id: value.availability_id, // Relaciona la disponibilidad elegida
+        service_type_id: value.service_type_id, // Relaciona el tipo de servicio
+        notes: value.notes, // Notas opcionales
+        status: "pending", // Estado inicial de la cita
       },
       { transaction: t }
     );
 
-    return newAppointment;
+    return newAppointment; // Devuelve la cita creada dentro de la transacción
   });
 
+  // Se recupera la cita completa con sus relaciones para la salida
   const fullAppointment = await findFullAppointmentById(result.id);
   return new AppointmentOutputDto(fullAppointment);
 }
 
 /**
- * Retrieves all appointments for the currently authenticated user with pagination.
- * @param {object} user - The authenticated user object.
- * @param {object} query - Query parameters for pagination (page, limit).
- * @returns {Promise<{appointments: AppointmentOutputDto[], pagination: object}>}
+ * Obtiene todas las citas del usuario autenticado con paginación.
+ * - Calcula `offset` a partir de `page` y `limit`.
+ * - Incluye disponibilidad y tipo de servicio en cada cita.
+ * @param {object} user - Objeto de usuario autenticado.
+ * @param {object} query - Parámetros de paginación (page, limit).
+ * @returns {Promise<{appointments: AppointmentOutputDto[], pagination: object}>} Lista paginada de citas y metadatos.
  */
 async function getMyAppointments(user, query = {}) {
-  const { page = 1, limit = 10 } = query;
-  const offset = (page - 1) * limit;
+  const { page = 1, limit = 10 } = query; // Valores por defecto para paginación
+  const offset = (page - 1) * limit; // Calcula el desplazamiento para la consulta
 
   const { count, rows } = await Appointment.findAndCountAll({
-    where: { user_id: user.id },
+    where: { user_id: user.id }, // Filtra por el usuario autenticado
     attributes: ['id', 'status', 'notes', 'createdAt', 'availability_id', 'service_type_id'],
     include: [
       {
         model: Availability,
         as: "availability",
         attributes: ['id', 'date', 'start_time', 'end_time'],
-        include: [{ model: User, as: "dentist", attributes: ["id", "name"] }],
+        include: [{ model: User, as: "dentist", attributes: ["id", "name"] }], // Incluye el dentista
       },
       {
         model: ServiceType,
         as: "serviceType",
         attributes: ['id', 'name', 'description', 'duration', 'is_active', 'specialty_id'],
-        include: [{ model: Specialty, as: "specialty", attributes: ["name", 'id', 'description', 'is_active'] }],
+        include: [{ model: Specialty, as: "specialty", attributes: ["name", 'id', 'description', 'is_active'] }], // Incluye la especialidad del servicio
       },
     ],
-    order: [["createdAt", "DESC"]],
-    limit: parseInt(limit),
-    offset: parseInt(offset),
+    order: [["createdAt", "DESC"]], // Ordena por creación descendente (más recientes primero)
+    limit: parseInt(limit), // Asegura que `limit` sea número
+    offset: parseInt(offset), // Asegura que `offset` sea número
   });
 
   return {
-    appointments: AppointmentOutputDto.fromList(rows),
+    appointments: AppointmentOutputDto.fromList(rows), // Mapea las citas al DTO de salida
     pagination: {
-      totalItems: count,
-      totalPages: Math.ceil(count / limit),
-      currentPage: parseInt(page),
-      limit: parseInt(limit),
+      totalItems: count, // Total de registros
+      totalPages: Math.ceil(count / limit), // Total de páginas
+      currentPage: parseInt(page), // Página actual como número
+      limit: parseInt(limit), // Límite por página como número
     },
   };
 }
 
 /**
- * Updates the status of a specific appointment.
- * @param {number} appointmentId - The ID of the appointment to update.
- * @param {object} statusData - The new status data.
- * @returns {Promise<AppointmentOutputDto>} The updated appointment.
+ * Actualiza el estado de una cita específica.
+ * - Valida el cuerpo recibido con el DTO correspondiente.
+ * - Verifica que la cita exista antes de actualizarla.
+ * - Devuelve la cita actualizada en formato de salida.
+ * @param {number} appointmentId - ID de la cita a actualizar.
+ * @param {object} statusData - Datos con el nuevo estado de la cita.
+ * @returns {Promise<AppointmentOutputDto>} La cita actualizada.
  */
 async function updateStatus(appointmentId, statusData) {
-  const { error, value } = updateAppointmentStatusDto.validate(statusData);
+  const { error, value } = updateAppointmentStatusDto.validate(statusData); // Valida la entrada
   if (error) {
     throw createHttpError(400, error.details[0].message);
   }
 
-  const appointment = await Appointment.findByPk(appointmentId);
+  const appointment = await Appointment.findByPk(appointmentId); // Busca la cita por ID
   if (!appointment) {
-    throw createHttpError(404, "Appointment not found");
+    throw createHttpError(404, "Appointment not found"); // Si no existe, error 404
   }
 
-  await appointment.update({ status: value.status });
+  await appointment.update({ status: value.status }); // Actualiza el estado
 
-  const fullAppointment = await findFullAppointmentById(appointmentId);
-  return new AppointmentOutputDto(fullAppointment);
+  const fullAppointment = await findFullAppointmentById(appointmentId); // Obtiene la versión completa
+  return new AppointmentOutputDto(fullAppointment); // Devuelve DTO de salida
 }
 
+// Exporta las funciones del servicio para ser usadas en controladores u otros módulos
 module.exports = {
   create,
   getMyAppointments,

@@ -1,16 +1,20 @@
+/**
+ * Servicio de especialidades (Specialty).
+ * Ofrece operaciones CRUD básicas con validación mediante DTOs y cacheo para lecturas frecuentes.
+ */
 const { Specialty } = require("../models");
-// We assume you will create these DTOs for validation, similar to the profile service.
+// Se asume que existen DTOs similares a otros servicios para validar entradas
 const createSpecialtyDto = require("../dtos/specialty/create-specialty.dto");
 const updateSpecialtyDto = require("../dtos/specialty/update-specialty.dto");
-// This DTO is for formatting the output sent to the client.
+// DTO para formatear la salida enviada al cliente
 const SpecialtyOutputDto = require("../dtos/specialty/specialty-output.dto");
 const cache = require("../utils/cache");
 
 /**
- * Creates a standard error object with a status code.
- * @param {number} status - The HTTP status code.
- * @param {string} message - The error message.
- * @returns {Error} A new error object with a status property.
+ * Crea un error HTTP estándar con código de estado.
+ * @param {number} status - Código de estado HTTP.
+ * @param {string} message - Mensaje del error.
+ * @returns {Error} Error con propiedad `status`.
  */
 const createHttpError = (status, message) => {
   const error = new Error(message);
@@ -18,15 +22,16 @@ const createHttpError = (status, message) => {
   return error;
 };
 
-const CACHE_TTL_MS = parseInt(process.env.CACHE_TTL_MS || '60000', 10);
+const CACHE_TTL_MS = parseInt(process.env.CACHE_TTL_MS || '60000', 10); // TTL de caché (60s por defecto)
 const CACHE_KEYS = {
-  all: 'specialties:all',
-  byId: (id) => `specialties:${id}`,
+  all: 'specialties:all', // Clave para todas las especialidades
+  byId: (id) => `specialties:${id}`, // Clave por ID de especialidad
 };
 
 /**
- * Retrieves all active specialties, ordered by name.
- * @returns {Promise<SpecialtyOutputDto[]>} A list of active specialties.
+ * Obtiene todas las especialidades activas ordenadas por nombre.
+ * Usa caché para evitar consultas repetitivas.
+ * @returns {Promise<SpecialtyOutputDto[]>} Lista de especialidades activas.
  */
 async function getAll() {
   return cache.wrap(CACHE_KEYS.all, CACHE_TTL_MS, async () => {
@@ -40,10 +45,11 @@ async function getAll() {
 }
 
 /**
- * Retrieves a single active specialty by its ID.
- * @param {number} id - The ID of the specialty.
- * @returns {Promise<SpecialtyOutputDto>} The specialty object.
- * @throws {Error} Throws a 404 error if the specialty is not found.
+ * Obtiene una especialidad activa por su ID.
+ * Usa caché para acelerar consultas.
+ * @param {number} id - ID de la especialidad.
+ * @returns {Promise<SpecialtyOutputDto>} La especialidad solicitada.
+ * @throws {Error} 404 si no se encuentra.
  */
 async function getById(id) {
   return cache.wrap(CACHE_KEYS.byId(id), CACHE_TTL_MS, async () => {
@@ -59,19 +65,18 @@ async function getById(id) {
 }
 
 /**
- * Creates a new specialty after validating the input.
- * @param {object} specialtyData - The data for the new specialty.
- * @param {string} specialtyData.name - The name of the specialty.
- * @param {string} [specialtyData.description] - The optional description.
- * @returns {Promise<SpecialtyOutputDto>} The newly created specialty.
- * @throws {Error} Throws validation (400) or conflict (409) errors.
+ * Crea una nueva especialidad tras validar los datos y verificar duplicados.
+ * - Invalida cachés relacionadas para reflejar el nuevo dato.
+ * @param {object} specialtyData - Datos de la especialidad.
+ * @returns {Promise<SpecialtyOutputDto>}
  */
 async function create(specialtyData) {
-  const { error, value } = createSpecialtyDto.validate(specialtyData);
+  const { error, value } = createSpecialtyDto.validate(specialtyData); // Valida entrada
   if (error) {
     throw createHttpError(400, error.details[0].message);
   }
 
+  // Evitar duplicado por nombre
   const existingSpecialty = await Specialty.findOne({
     where: { name: value.name },
   });
@@ -80,21 +85,23 @@ async function create(specialtyData) {
   }
 
   const newSpecialty = await Specialty.create(value);
-  // Invalidate caches
+  // Invalidar cachés relacionadas
   cache.del(CACHE_KEYS.all);
   cache.del(CACHE_KEYS.byId(newSpecialty.id));
   return new SpecialtyOutputDto(newSpecialty);
 }
 
 /**
- * Updates an existing specialty.
- * @param {number} id - The ID of the specialty to update.
- * @param {object} specialtyData - The new data for the specialty.
- * @returns {Promise<SpecialtyOutputDto>} The updated specialty.
- * @throws {Error} Throws validation (400), not found (404), or conflict (409) errors.
+ * Actualiza una especialidad existente.
+ * - Valida el DTO.
+ * - Verifica existencia y conflicto de nombre cuando aplique.
+ * - Invalida entradas de caché.
+ * @param {number} id - ID de la especialidad a actualizar.
+ * @param {object} specialtyData - Datos a actualizar.
+ * @returns {Promise<SpecialtyOutputDto>}
  */
 async function update(id, specialtyData) {
-  const { error, value } = updateSpecialtyDto.validate(specialtyData);
+  const { error, value } = updateSpecialtyDto.validate(specialtyData); // Valida entrada
   if (error) {
     throw createHttpError(400, error.details[0].message);
   }
@@ -104,7 +111,7 @@ async function update(id, specialtyData) {
     throw createHttpError(404, "Specialty not found");
   }
 
-  // Check for name conflict only if the name is being changed
+  // Si cambia el nombre, verificar que no exista otro igual
   if (value.name && value.name !== specialty.name) {
     const existingSpecialty = await Specialty.findOne({
       where: { name: value.name },
@@ -118,17 +125,17 @@ async function update(id, specialtyData) {
   }
 
   await specialty.update(value);
-  // Invalidate caches
+  // Invalidar caché para reflejar cambios
   cache.del(CACHE_KEYS.all);
   cache.del(CACHE_KEYS.byId(id));
   return new SpecialtyOutputDto(specialty);
 }
 
 /**
- * Deactivates a specialty (soft delete).
- * @param {number} id - The ID of the specialty to deactivate.
- * @returns {Promise<{message: string}>} A success message.
- * @throws {Error} Throws a 404 error if the specialty is not found.
+ * Desactiva (soft delete) una especialidad.
+ * - Invalida cachés para mantener coherencia en lecturas.
+ * @param {number} id - ID de la especialidad a desactivar.
+ * @returns {Promise<{message: string}>}
  */
 async function deactivate(id) {
   const specialty = await Specialty.findByPk(id);
@@ -137,7 +144,7 @@ async function deactivate(id) {
   }
 
   await specialty.update({ is_active: false });
-  // Invalidate caches
+  // Invalidar cachés
   cache.del(CACHE_KEYS.all);
   cache.del(CACHE_KEYS.byId(id));
   return { message: "Specialty deactivated successfully." };
