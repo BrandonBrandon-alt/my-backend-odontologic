@@ -1,7 +1,12 @@
+/**
+ * Router de autenticación.
+ * Define rutas para registro, login, activación de cuenta, restablecimiento de contraseña,
+ * verificación de token y manejo de refresh/logout.
+ */
 // src/routers/auth.router.js
 
 const express = require("express");
-const router = express.Router();
+const router = express.Router(); // Instancia del router de Express
 const authController = require("../controllers/auth.controller");
 const { authenticateToken } = require("../middleware/auth.middleware");
 
@@ -14,14 +19,14 @@ const recaptchaMiddleware = require("../middleware/recaptcha.middleware");
  * =================================================================
  */
 
-// ✅ Rutas usando el middleware correctamente
+// ✅ Rutas usando el middleware correctamente (protegen contra bots/abuso)
 router.post("/register", recaptchaMiddleware, authController.register);
 router.post("/login", recaptchaMiddleware, authController.login);
 
 // --- El resto de tus rutas no necesitan reCAPTCHA ---
-router.post("/logout", authenticateToken, authController.logout);
-router.post("/token/refresh", authController.refreshToken);
-router.get("/verify", authenticateToken, authController.verifyToken);
+router.post("/logout", authenticateToken, authController.logout); // Requiere usuario autenticado
+router.post("/token/refresh", authController.refreshToken); // Emite nuevo access token
+router.get("/verify", authenticateToken, authController.verifyToken); // Verifica sesión vigente
 
 /*
  * =================================================================

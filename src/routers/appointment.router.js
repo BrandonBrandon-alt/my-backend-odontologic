@@ -1,14 +1,20 @@
+/**
+ * Router de citas (appointments).
+ * Define rutas públicas, privadas (usuario autenticado) y de administración
+ * para crear citas, listar las propias y actualizar el estado.
+ */
 const express = require("express");
-const router = express.Router();
+const router = express.Router(); // Instancia de router de Express
 const appointmentController = require("../controllers/appointment.controller");
 const {
   authenticateToken,
   authorizeRoles,
-} = require("../middleware/auth.middleware"); // Assuming this is the correct path
+} = require("../middleware/auth.middleware"); // Middlewares de autenticación y autorización
 
 /*
  * =================================================================
  * PUBLIC ROUTES
+ * Rutas accesibles sin autenticación
  * =================================================================
  */
 
@@ -20,10 +26,11 @@ router.post("/guest", appointmentController.create);
 /*
  * =================================================================
  * AUTHENTICATED USER ROUTES
+ * Rutas que requieren autenticación (usuario logueado)
  * =================================================================
  */
 
-// Apply authentication middleware to all routes below this point
+// Aplica autenticación a todas las rutas siguientes
 router.use(authenticateToken);
 
 // @route   POST /api/appointments
@@ -39,6 +46,7 @@ router.get("/my", appointmentController.getMyAppointments);
 /*
  * =================================================================
  * ADMIN ROUTES
+ * Rutas restringidas a administradores
  * =================================================================
  */
 
@@ -47,12 +55,12 @@ router.get("/my", appointmentController.getMyAppointments);
 // @access  Admin
 router.patch(
   "/:id/status",
-  authorizeRoles("admin"),
+  authorizeRoles("admin"), // Verifica que el rol sea administrador
   appointmentController.updateStatus
 );
 
-// Note: The following admin-specific routes require corresponding methods in the controller.
-// They are commented out until those methods are created.
+// Nota: Las siguientes rutas de administrador requieren métodos correspondientes en el controlador.
+// Se mantienen comentadas hasta que dichos métodos existan.
 
 // @route   GET /api/appointments
 // @desc    Get all appointments in the system

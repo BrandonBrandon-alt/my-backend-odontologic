@@ -1,13 +1,18 @@
+/**
+ * Router de contacto.
+ * Define la ruta pública para el envío de mensajes desde el formulario de contacto.
+ */
 const express = require('express');
-const router = express.Router();
+const router = express.Router(); // Instancia del router de Express
 const contactController = require('../controllers/contact.controller');
 
-// Assuming you have a rate limiter middleware for this public endpoint
+// Se asume un middleware de rate-limiting para este endpoint público
 // const contactRateLimiter = require('../middleware/contact-rate-limiter.middleware');
 
 /*
 * =================================================================
 * CONTACT ROUTES
+* Rutas públicas de contacto
 * =================================================================
 */
 
@@ -16,7 +21,7 @@ const contactController = require('../controllers/contact.controller');
 // @access  Public
 router.post(
   '/',
-  // contactRateLimiter, // Apply rate limiting to prevent spam
+  // contactRateLimiter, // Aplicar limitador de tasa para prevenir spam
   contactController.sendContactMessage
 );
 

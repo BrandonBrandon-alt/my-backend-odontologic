@@ -1,5 +1,10 @@
+/**
+ * Router de especialidades (Specialty).
+ * Define rutas públicas para consultar especialidades y rutas protegidas (solo admin)
+ * para crear, actualizar y desactivar.
+ */
 const express = require("express");
-const router = express.Router();
+const router = express.Router(); // Instancia del router de Express
 const specialtyController = require("../controllers/specialty.controller");
 const {
   authenticateToken,
@@ -9,6 +14,7 @@ const {
 /*
  * =================================================================
  * PUBLIC ROUTES
+ * Rutas de libre acceso
  * =================================================================
  */
 
@@ -25,10 +31,11 @@ router.get("/:id", specialtyController.getById);
 /*
  * =================================================================
  * PROTECTED ROUTES (Admin Only)
+ * Rutas que requieren autenticación y rol admin
  * =================================================================
  */
 
-// Apply authentication and role authorization middleware to all subsequent routes
+// Aplica autenticación y autorización a las rutas siguientes (solo admin)
 router.use(authenticateToken);
 router.use(authorizeRoles("admin"));
 
