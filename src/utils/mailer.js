@@ -1,3 +1,9 @@
+/**
+ * Utilidades para envío de correos electrónicos con Nodemailer.
+ * - Configura el transporter (Gmail) usando variables de entorno.
+ * - Proporciona helpers para distintos correos (activación, recuperación, contacto, confirmación de cita).
+ * - Incluye un layout base reutilizable con paleta de colores.
+ */
 require('dotenv').config(); // Asegúrate de que esto se ejecute al inicio de tu aplicación para cargar las variables de entorno
 const e = require('cors');
 const nodemailer = require('nodemailer');
@@ -18,6 +24,7 @@ const COLORS = {
 };
 
 // ======================= CONFIGURACIÓN DEL TRANSPORTADOR =======================
+// Configura el transporter de Nodemailer usando Gmail (requiere credenciales válidas)
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
@@ -27,6 +34,7 @@ const transporter = nodemailer.createTransport({
 });
 
 // ======================= FUNCIÓN GENÉRICA PARA ENVIAR EMAIL =======================
+// Envoltorio para enviar correos con manejo de errores uniforme
 async function sendEmail(to, subject, text, html) {
   try {
     await transporter.sendMail({
@@ -45,7 +53,7 @@ async function sendEmail(to, subject, text, html) {
 }
 
 // ======================= LAYOUT BASE DE EMAIL =======================
-// Función para generar un layout base para los correos
+// Genera un HTML base para envolver el contenido de cada correo
 function getBaseEmailLayout(contentHtml) {
   return `
     <div style="font-family: 'Inter', Arial, sans-serif; background-color: ${COLORS.backgroundLight}; margin: 0; padding: 20px; color: ${COLORS.textDark};">
@@ -75,6 +83,7 @@ function getBaseEmailLayout(contentHtml) {
 }
 
 // ======================= EMAIL DE ACTIVACIÓN DE CUENTA =======================
+// Construye y envía el correo de activación con el código proporcionado
 async function sendActivationEmail(email, code) {
   const content = `
     <h2 style="color: ${COLORS.primaryDarker}; font-size: 20px; margin-top: 0;">¡Bienvenido a Odontologic!</h2>
@@ -94,6 +103,7 @@ async function sendActivationEmail(email, code) {
 }
 
 // ======================= EMAIL DE RECUPERACIÓN DE CONTRASEÑA =======================
+// Construye y envía el correo de recuperación con el código de restablecimiento
 async function sendPasswordResetEmail(email, code) {
   const content = `
     <h2 style="color: ${COLORS.primaryDarker}; font-size: 20px; margin-top: 0;">Recuperación de Contraseña</h2>
@@ -232,6 +242,7 @@ async function sendAppointmentConfirmationEmail(to, appointmentDetails, baseUrl 
 }
 
 // ======================= EMAIL DE CONFIRMACIÓN DE CONTACTO =======================
+// Envío de acuse de recibo al usuario que completó el formulario de contacto
 async function sendConfirmationEmail(userEmail, userName) {
   const content = `
     <h2 style="color: ${COLORS.primaryDarker}; font-size: 20px; margin-top: 0;">¡Gracias por contactarnos!</h2>
@@ -252,6 +263,7 @@ async function sendConfirmationEmail(userEmail, userName) {
 }
 
 // ======================= EMAIL DE NOTIFICACIÓN DE CONTACTO =======================
+// Notificación al administrador con el contenido del mensaje recibido
 async function sendNotificationEmail(contactMessage) {
   const content = `
     <h2 style="color: ${COLORS.error}; font-size: 20px; margin-top: 0;">Nuevo mensaje de contacto</h2>
