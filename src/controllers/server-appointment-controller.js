@@ -1,5 +1,13 @@
+/**
+ * Controlador de citas (lado servidor para panel/administración).
+ * Proporciona endpoints para estadísticas, listado completo, obtención por ID y actualización de estado.
+ * Delegan la lógica al servicio `serverAppointmentService`.
+ */
 const serverAppointmentService = require('../services/server-appointment-service');
 
+/**
+ * Obtiene estadísticas de citas.
+ */
 exports.getAppointmentStats = async (req, res) => {
   try {
     const stats = await serverAppointmentService.getAppointmentStats();
@@ -9,6 +17,9 @@ exports.getAppointmentStats = async (req, res) => {
   }
 };
 
+/**
+ * Obtiene todas las citas (uso administrativo).
+ */
 exports.getAllAppointments = async (req, res) => {
   try {
     const appointments = await serverAppointmentService.getAllAppointments();
@@ -18,6 +29,9 @@ exports.getAllAppointments = async (req, res) => {
   }
 };
 
+/**
+ * Obtiene una cita por su ID.
+ */
 exports.getById = async (req, res) => {
   try {
     const appointment = await serverAppointmentService.getById(req.params.id);
@@ -27,6 +41,9 @@ exports.getById = async (req, res) => {
   }
 };
 
+/**
+ * Actualiza el estado de una cita por ID.
+ */
 exports.updateStatus = async (req, res) => {
   try {
     const result = await serverAppointmentService.updateStatus(req.params.id, req.body.status);

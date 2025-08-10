@@ -1,13 +1,18 @@
+/**
+ * Servicio de disponibilidades (availability).
+ * Gestiona la consulta, creación, actualización y desactivación de horarios de atención
+ * de los dentistas, validando solapamientos y estados, e incluyendo las relaciones necesarias.
+ */
 const { Availability, User, Specialty, Appointment, Op } = require("../models");
 const createAvailabilityDto = require("../dtos/availability/create-availability.dto");
 const updateAvailabilityDto = require("../dtos/availability/update-availability.dto");
 const AvailabilityOutputDto = require("../dtos/availability/availability-output.dto");
 
 /**
- * Creates a standard error object with a status code.
- * @param {number} status - The HTTP status code.
- * @param {string} message - The error message.
- * @returns {Error} A new error object with a status property.
+ * Crea un error HTTP estándar con código de estado.
+ * @param {number} status - Código de estado HTTP.
+ * @param {string} message - Mensaje del error.
+ * @returns {Error} Error con propiedad `status`.
  */
 const createHttpError = (status, message) => {
   const error = new Error(message);
@@ -16,48 +21,49 @@ const createHttpError = (status, message) => {
 };
 
 /**
- * Builds a query clause to filter out past availabilities.
- * @returns {object} A Sequelize query clause.
+ * Construye una cláusula de consulta para filtrar disponibilidades futuras.
+ * Considera fecha mayor a hoy o, si es hoy, que la hora de inicio sea mayor a la hora actual.
+ * @returns {object} Cláusula para usar en `where` de Sequelize.
  */
 const getFutureAvailabilitiesClause = () => {
   const now = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
-  const currentTimeStr = now.toTimeString().slice(0, 8);
+  const todayStr = now.toISOString().slice(0, 10); // YYYY-MM-DD
+  const currentTimeStr = now.toTimeString().slice(0, 8); // HH:MM:SS
   return {
     [Op.or]: [
-      { date: { [Op.gt]: todayStr } },
-      { date: todayStr, start_time: { [Op.gt]: currentTimeStr } },
+      { date: { [Op.gt]: todayStr } }, // Fechas futuras
+      { date: todayStr, start_time: { [Op.gt]: currentTimeStr } }, // Hoy pero más tarde
     ],
   };
 };
 
 /**
- * Retrieves all future active availabilities.
- * @returns {Promise<AvailabilityOutputDto[]>} A list of availabilities.
+ * Obtiene todas las disponibilidades futuras activas.
+ * @returns {Promise<AvailabilityOutputDto[]>} Lista de disponibilidades formateadas.
  */
 async function getAll() {
   const availabilities = await Availability.findAll({
     where: {
-      is_active: true,
-      ...getFutureAvailabilitiesClause(),
+      is_active: true, // Solo registros activos
+      ...getFutureAvailabilitiesClause(), // Solo futuras
     },
     attributes: ['id', 'date', 'start_time', 'end_time', 'dentist_id', 'specialty_id'],
     include: [
-      { model: User, as: "dentist", attributes: ["id", "name"] },
-      { model: Specialty, as: "specialty", attributes: ["id", "name", "description", "is_active"] },
+      { model: User, as: "dentist", attributes: ["id", "name"] }, // Incluye dentista
+      { model: Specialty, as: "specialty", attributes: ["id", "name", "description", "is_active"] }, // Incluye especialidad
     ],
     order: [
-      ["date", "ASC"],
-      ["start_time", "ASC"],
+      ["date", "ASC"], // Primero por fecha
+      ["start_time", "ASC"], // Luego por hora de inicio
     ],
   });
   return AvailabilityOutputDto.fromList(availabilities);
 }
 
 /**
- * Retrieves future active availabilities by specialty.
- * @param {number} specialtyId - The ID of the specialty.
- * @returns {Promise<AvailabilityOutputDto[]>} A list of availabilities.
+ * Obtiene disponibilidades futuras activas filtradas por especialidad.
+ * @param {number} specialtyId - ID de la especialidad.
+ * @returns {Promise<AvailabilityOutputDto[]>} Lista de disponibilidades.
  */
 async function getBySpecialty(specialtyId) {
   const availabilities = await Availability.findAll({
@@ -80,9 +86,9 @@ async function getBySpecialty(specialtyId) {
 }
 
 /**
- * Retrieves future active availabilities by dentist.
- * @param {number} dentistId - The ID of the dentist.
- * @returns {Promise<AvailabilityOutputDto[]>} A list of availabilities.
+ * Obtiene disponibilidades futuras activas filtradas por dentista.
+ * @param {number} dentistId - ID del dentista.
+ * @returns {Promise<AvailabilityOutputDto[]>} Lista de disponibilidades.
  */
 async function getByDentist(dentistId) {
   const availabilities = await Availability.findAll({
@@ -105,14 +111,14 @@ async function getByDentist(dentistId) {
 }
 
 /**
- * Retrieves a single active availability by its ID.
- * @param {number} id - The ID of the availability.
- * @returns {Promise<AvailabilityOutputDto>} The availability object.
- * @throws {Error} Throws a 404 error if not found.
+ * Obtiene una disponibilidad activa por su ID.
+ * @param {number} id - ID de la disponibilidad.
+ * @returns {Promise<AvailabilityOutputDto>} La disponibilidad formateada.
+ * @throws {Error} 404 si no existe.
  */
 async function getById(id) {
   const availability = await Availability.findOne({
-    where: { id, is_active: true },
+    where: { id, is_active: true }, // Debe estar activa
     attributes: ['id', 'date', 'start_time', 'end_time', 'dentist_id', 'specialty_id'],
     include: [
       { model: User, as: "dentist", attributes: ["id", "name"] },
@@ -126,31 +132,35 @@ async function getById(id) {
 }
 
 /**
- * Creates a new availability slot.
- * @param {object} availabilityData - The data for the new availability.
- * @returns {Promise<AvailabilityOutputDto>} The newly created availability.
- * @throws {Error} Throws validation, not found, or conflict errors.
+ * Crea un nuevo bloque de disponibilidad.
+ * - Valida entrada con DTO.
+ * - Verifica que el dentista y la especialidad existan y estén activos.
+ * - Verifica que no haya solapamientos con otras disponibilidades activas.
+ * @param {object} availabilityData - Datos de la disponibilidad.
+ * @returns {Promise<AvailabilityOutputDto>} La disponibilidad creada.
+ * @throws {Error} 400/404/409 según validaciones.
  */
 async function create(availabilityData) {
-  const { error, value } = createAvailabilityDto.validate(availabilityData);
+  const { error, value } = createAvailabilityDto.validate(availabilityData); // Valida datos de entrada
   if (error) {
     throw createHttpError(400, error.details[0].message);
   }
 
   const dentist = await User.findOne({
-    where: { id: value.dentist_id, role: "dentist", status: "active" },
+    where: { id: value.dentist_id, role: "dentist", status: "active" }, // Debe ser dentista activo
     attributes: ['id', 'name'],
   });
   if (!dentist)
     throw createHttpError(404, "Dentist not found or is not active");
 
   const specialty = await Specialty.findOne({
-    where: { id: value.specialty_id, is_active: true },
+    where: { id: value.specialty_id, is_active: true }, // Especialidad activa
     attributes: ['id', 'name', 'description', 'is_active'],
   });
   if (!specialty)
     throw createHttpError(404, "Specialty not found or is not active");
 
+  // Verifica solapamiento: start_time < end_time existente Y end_time > start_time nuevo
   const conflictingAvailability = await Availability.findOne({
     where: {
       dentist_id: value.dentist_id,
@@ -170,7 +180,7 @@ async function create(availabilityData) {
 
   const newAvailability = await Availability.create(value);
 
-  // Attach related models we already fetched to avoid extra DB calls
+  // Adjunta modelos relacionados ya obtenidos para evitar consultas extra
   newAvailability.dentist = dentist;
   newAvailability.specialty = specialty;
 
@@ -178,23 +188,26 @@ async function create(availabilityData) {
 }
 
 /**
- * Updates an existing availability slot.
- * @param {number} id - The ID of the availability to update.
- * @param {object} availabilityData - The new data for the availability.
- * @returns {Promise<AvailabilityOutputDto>} The updated availability.
+ * Actualiza un bloque de disponibilidad existente.
+ * - Valida el DTO.
+ * - Verifica existencia.
+ * - Si cambian fecha/hora/dentista, verifica solapamientos.
+ * @param {number} id - ID de la disponibilidad a actualizar.
+ * @param {object} availabilityData - Datos a actualizar.
+ * @returns {Promise<AvailabilityOutputDto>} La disponibilidad actualizada.
  */
 async function update(id, availabilityData) {
-  const { error, value } = updateAvailabilityDto.validate(availabilityData);
+  const { error, value } = updateAvailabilityDto.validate(availabilityData); // Valida entrada
   if (error) {
     throw createHttpError(400, error.details[0].message);
   }
 
-  const availability = await Availability.findByPk(id);
+  const availability = await Availability.findByPk(id); // Comprueba que exista
   if (!availability) {
     throw createHttpError(404, "Availability not found");
   }
 
-  // Check for conflicts only if date, time, or dentist are being changed.
+  // Solo checkea solapamientos si cambian campos relevantes
   const checkConflict =
     value.date || value.start_time || value.end_time || value.dentist_id;
 
@@ -206,7 +219,7 @@ async function update(id, availabilityData) {
 
     const conflictingAvailability = await Availability.findOne({
       where: {
-        id: { [Op.ne]: id }, // Exclude the current availability from the check
+        id: { [Op.ne]: id }, // Excluye la disponibilidad actual
         dentist_id: finalDentistId,
         date: finalDate,
         is_active: true,
@@ -223,17 +236,18 @@ async function update(id, availabilityData) {
     }
   }
 
-  await availability.update(value);
-  const updatedAvailability = await findFullAvailabilityById(id);
+  await availability.update(value); // Persiste la actualización
+  const updatedAvailability = await findFullAvailabilityById(id); // Recupera con relaciones
 
   return new AvailabilityOutputDto(updatedAvailability);
 }
 
 /**
- * Deactivates an availability slot.
- * @param {number} id - The ID of the availability to deactivate.
- * @returns {Promise<{message: string}>} A success message.
- * @throws {Error} Throws a 404 error if not found or 400 if there are pending appointments.
+ * Desactiva una disponibilidad (soft delete).
+ * - Verifica que no existan citas pendientes o confirmadas asociadas.
+ * @param {number} id - ID de la disponibilidad a desactivar.
+ * @returns {Promise<{message: string}>} Mensaje de éxito.
+ * @throws {Error} 404 si no existe, 400 si hay citas pendientes/confirmadas.
  */
 async function deactivate(id) {
   const availability = await Availability.findByPk(id);
@@ -244,7 +258,7 @@ async function deactivate(id) {
   const pendingAppointments = await Appointment.count({
     where: {
       availability_id: id,
-      status: ["pending", "confirmed"],
+      status: ["pending", "confirmed"], // Estados que impiden desactivación
     },
   });
   if (pendingAppointments > 0) {
@@ -254,13 +268,15 @@ async function deactivate(id) {
     );
   }
 
-  await availability.update({ is_active: false });
+  await availability.update({ is_active: false }); // Soft delete
   return { message: "Availability deactivated successfully." };
 }
 
 /**
- * Fetches an availability by its ID and includes related data.
- * This is the helper function that was missing.
+ * Obtiene una disponibilidad por ID incluyendo relaciones.
+ * Función de ayuda utilizada para devolver datos completos tras crear/actualizar.
+ * @param {number} id - ID de la disponibilidad.
+ * @returns {Promise<Availability>} Instancia con includes.
  */
 const findFullAvailabilityById = async (id) => {
   return Availability.findByPk(id, {
@@ -272,6 +288,7 @@ const findFullAvailabilityById = async (id) => {
   });
 };
 
+// Exportaciones del servicio
 module.exports = {
   getAll,
   getBySpecialty,

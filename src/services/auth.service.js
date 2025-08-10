@@ -1,3 +1,9 @@
+/**
+ * Servicio de autenticación y gestión de cuentas de usuario.
+ * Proporciona registro, login, refresco de tokens, logout, activación de cuenta,
+ * reenvío de código de activación, solicitud y verificación de restablecimiento de contraseña,
+ * restablecimiento de contraseña y verificación de sesión mediante token.
+ */
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { Op } = require("sequelize");
@@ -8,7 +14,7 @@ const {
 } = require("../utils/mailer");
 const { sanitizeUser } = require("../utils/user.utils");
 
-// DTO Imports
+// DTO Imports (validaciones de entrada)
 const registerDto = require("../dtos/auth/register.dto");
 const loginDto = require("../dtos/auth/login.dto");
 const resetPasswordDto = require("../dtos/auth/reset-password.dto");
@@ -17,7 +23,9 @@ const verifyCodeDto = require("../dtos/auth/verify-code.dto");
 const tokenDto = require("../dtos/auth/token.dto");
 
 /**
- * Creates a standard error object with a status code.
+ * Crea un error estándar con código de estado HTTP.
+ * @param {number} status - Código de estado HTTP.
+ * @param {string} message - Mensaje descriptivo del error.
  */
 const createHttpError = (status, message) => {
   const error = new Error(message);
@@ -26,27 +34,36 @@ const createHttpError = (status, message) => {
 };
 
 /**
- * Generates a random code and its expiration date.
+ * Genera un código aleatorio y su fecha de expiración.
+ * @param {number} [length=8] - Longitud del código.
+ * @param {number} [expiresInMinutes=60] - Minutos hasta la expiración.
+ * @returns {{code: string, expiresAt: Date}} Código y fecha de expiración.
  */
 function generateCodeWithExpiration(length = 8, expiresInMinutes = 60) {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // Evita caracteres ambiguos como I, O, 0, 1
   let code = "";
   for (let i = 0; i < length; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
+    code += chars.charAt(Math.floor(Math.random() * chars.length)); // Selecciona un carácter aleatorio
   }
-  const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);
+  const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000); // Calcula la fecha de expiración
   return { code, expiresAt };
 }
 
 /**
- * Registers a new user.
+ * Registra un nuevo usuario.
+ * - Valida los datos de entrada.
+ * - Verifica si ya existe un usuario por email o cédula.
+ * - Hashea la contraseña, genera código de activación y envía email.
+ * @param {object} data - Datos del registro.
+ * @returns {Promise<object>} Usuario saneado (sin campos sensibles).
  */
 async function register(data) {
-  const { error, value } = registerDto.validate(data);
+  const { error, value } = registerDto.validate(data); // Valida la estructura del registro
   if (error) throw createHttpError(400, error.details[0].message);
 
   const { name, idNumber, email, password, phone, address, birth_date } = value;
 
+  // Busca coincidencia por cédula o email para evitar duplicados
   const existingUser = await User.findOne({
     where: { [Op.or]: [{ id_number: idNumber }, { email }] },
   });
@@ -57,9 +74,10 @@ async function register(data) {
     );
   }
 
-  const hashedPassword = await bcrypt.hash(password, 10);
-  const { code, expiresAt } = generateCodeWithExpiration(8, 1440); // 24 hours
+  const hashedPassword = await bcrypt.hash(password, 10); // Hashea la contraseña con salt 10
+  const { code, expiresAt } = generateCodeWithExpiration(8, 1440); // 24 horas para activar
 
+  // Crea el usuario con estado inactivo y datos básicos
   const user = await User.create({
     name,
     id_number: idNumber,
@@ -74,31 +92,38 @@ async function register(data) {
     activation_expires_at: expiresAt,
   });
 
-  await sendActivationEmail(email, code);
-  return sanitizeUser(user);
+  await sendActivationEmail(email, code); // Envía email con el código de activación
+  return sanitizeUser(user); // Retorna el usuario sin campos sensibles
 }
 
 /**
- * Logs a user in and provides JWT tokens.
+ * Inicia sesión y entrega tokens JWT (access y refresh).
+ * - Valida credenciales.
+ * - Verifica que la cuenta esté activa.
+ * - Genera y persiste refresh token con expiración.
+ * @param {object} data - Credenciales { email, password }.
+ * @returns {Promise<{accessToken:string, refreshToken:string, user:object}>}
  */
 async function login(data) {
-  const { error, value } = loginDto.validate(data);
+  const { error, value } = loginDto.validate(data); // Valida credenciales de entrada
   if (error) throw createHttpError(400, error.details[0].message);
 
   const { email, password } = value;
-  const user = await User.findOne({ where: { email } });
+  const user = await User.findOne({ where: { email } }); // Busca por email
   if (!user || !(await bcrypt.compare(password, user.password))) {
+    // Si no existe o la contraseña no coincide
     throw createHttpError(401, "Invalid credentials.");
   }
 
   if (user.status !== "active") {
+    // La cuenta debe estar activada para permitir login
     throw createHttpError(
       403,
       "Account is inactive or locked. Please activate your account."
     );
   }
 
-  const userPayload = { id: user.id, role: user.role };
+  const userPayload = { id: user.id, role: user.role }; // Payload mínimo para el token
   const accessToken = jwt.sign(userPayload, process.env.JWT_SECRET, {
     expiresIn: "1h",
   });
@@ -106,7 +131,7 @@ async function login(data) {
     expiresIn: "7d",
   });
 
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // Fecha de expiración del refresh token
   await RefreshToken.create({
     user_id: user.id,
     token: refreshToken,
@@ -116,12 +141,17 @@ async function login(data) {
   return {
     accessToken,
     refreshToken,
-    user: sanitizeUser(user),
+    user: sanitizeUser(user), // Sanea campos sensibles
   };
 }
 
 /**
- * Generates a new access token using a refresh token.
+ * Genera un nuevo access token utilizando un refresh token válido.
+ * - Valida el formato del token recibido.
+ * - Verifica existencia y expiración en base de datos.
+ * - Verifica la firma y devuelve un nuevo access token.
+ * @param {{token:string}} tokenData - Objeto con el refresh token.
+ * @returns {Promise<{accessToken:string}>}
  */
 async function refreshToken(tokenData) {
   const { error, value } = tokenDto.validate(tokenData);
@@ -131,14 +161,15 @@ async function refreshToken(tokenData) {
   if (!dbToken) throw createHttpError(401, "Invalid refresh token.");
 
   if (new Date() > new Date(dbToken.expires_at)) {
+    // Si el token expiró, se elimina y se rechaza
     await dbToken.destroy();
     throw createHttpError(403, "Refresh token has expired.");
   }
 
   try {
-    const decoded = jwt.verify(value.token, process.env.JWT_REFRESH_SECRET);
+    const decoded = jwt.verify(value.token, process.env.JWT_REFRESH_SECRET); // Verifica firma y expiración
     const user = await User.findByPk(decoded.id);
-    if (!user) throw new Error();
+    if (!user) throw new Error(); // Seguridad: usuario podría haber sido eliminado
 
     const userPayload = { id: user.id, role: user.role };
     const newAccessToken = jwt.sign(userPayload, process.env.JWT_SECRET, {
@@ -146,23 +177,29 @@ async function refreshToken(tokenData) {
     });
     return { accessToken: newAccessToken };
   } catch (err) {
+    // Si falla la verificación, se elimina el token de la BD y se responde 403
     await dbToken.destroy();
     throw createHttpError(403, "Invalid refresh token.");
   }
 }
 
 /**
- * Logs a user out by deleting their refresh token.
+ * Cierra sesión eliminando el refresh token almacenado.
+ * - Si falta el token, simplemente no hace nada para no filtrar información.
+ * @param {{token:string}} tokenData - Objeto con el refresh token.
  */
 async function logout(tokenData) {
   const { error, value } = tokenDto.validate(tokenData);
-  if (error) return; // If token is missing, just ignore.
+  if (error) return; // Si falta el token, se ignora silenciosamente
 
-  await RefreshToken.destroy({ where: { token: value.token } });
+  await RefreshToken.destroy({ where: { token: value.token } }); // Elimina el token de la BD
 }
 
 /**
- * Activates a user's account with an activation code.
+ * Activa la cuenta de un usuario mediante un código de activación enviado por email.
+ * - Valida email y código.
+ * - Verifica expiración del código.
+ * @param {{email:string, code:string}} data
  */
 async function activateAccount(data) {
   const { error, value } = verifyCodeDto.validate(data);
@@ -173,12 +210,14 @@ async function activateAccount(data) {
   if (!user) throw createHttpError(400, "Invalid email or activation code.");
 
   if (new Date() > new Date(user.activation_expires_at)) {
+    // El código de activación ha caducado
     throw createHttpError(
       400,
       "Activation code has expired. Please request a new one."
     );
   }
 
+  // Marca como activa y limpia campos de activación
   user.status = "active";
   user.activation_code = null;
   user.activation_expires_at = null;
@@ -186,7 +225,9 @@ async function activateAccount(data) {
 }
 
 /**
- * Resends the activation code to a user's email.
+ * Reenvía un nuevo código de activación al correo del usuario.
+ * - Solo para cuentas no activas.
+ * @param {{email:string}} data
  */
 async function resendActivationCode(data) {
   const { error, value } = emailDto.validate(data);
@@ -197,7 +238,7 @@ async function resendActivationCode(data) {
   if (user.status === "active")
     throw createHttpError(400, "This account is already active.");
 
-  const { code, expiresAt } = generateCodeWithExpiration(8, 1440);
+  const { code, expiresAt } = generateCodeWithExpiration(8, 1440); // 24 horas
   user.activation_code = code;
   user.activation_expires_at = expiresAt;
   await user.save();
@@ -205,7 +246,9 @@ async function resendActivationCode(data) {
 }
 
 /**
- * Sends a password reset code to a user's email.
+ * Envía un código de restablecimiento de contraseña al correo del usuario.
+ * - El código expira en 30 minutos.
+ * @param {{email:string}} data
  */
 async function requestPasswordReset(data) {
   const { error, value } = emailDto.validate(data);
@@ -214,7 +257,7 @@ async function requestPasswordReset(data) {
   const user = await User.findOne({ where: { email: value.email } });
   if (!user) throw createHttpError(404, "User not found.");
 
-  const { code, expiresAt } = generateCodeWithExpiration(8, 30); // 30 minutes
+  const { code, expiresAt } = generateCodeWithExpiration(8, 30); // 30 minutos
   user.password_reset_code = code;
   user.password_reset_expires_at = expiresAt;
   await user.save();
@@ -222,7 +265,10 @@ async function requestPasswordReset(data) {
 }
 
 /**
- * Resets a user's password using a valid reset code.
+ * Restablece la contraseña de un usuario usando un código válido.
+ * - Valida el DTO que incluye código y nueva contraseña.
+ * - Verifica expiración del código.
+ * @param {{resetCode:string, newPassword:string}} data
  */
 async function resetPassword(data) {
   const { error, value } = resetPasswordDto.validate(data);
@@ -235,27 +281,29 @@ async function resetPassword(data) {
   if (!user) throw createHttpError(400, "Invalid or expired reset code.");
 
   if (new Date() > new Date(user.password_reset_expires_at)) {
+    // Si el código caducó, se rechaza
     throw createHttpError(
       400,
       "Reset code has expired. Please request a new one."
     );
   }
 
-  user.password = await bcrypt.hash(newPassword, 10);
-  user.password_reset_code = null;
-  user.password_reset_expires_at = null;
+  user.password = await bcrypt.hash(newPassword, 10); // Hashea la nueva contraseña
+  user.password_reset_code = null; // Limpia el código
+  user.password_reset_expires_at = null; // Limpia la expiración
   await user.save();
 }
 
 /**
- * Verifies a user's session by finding them in the database.
- * @param {number} userId - The ID of the user from the decoded JWT.
- * @returns {object} The sanitized user object.
+ * Verifica la sesión de un usuario buscando su registro en la base de datos.
+ * @param {number} userId - ID del usuario (proveniente del JWT decodificado).
+ * @returns {object} Usuario saneado.
+ * @throws {Error} 404 si el usuario no existe.
  */
 async function verifyToken(userId) {
   const user = await User.findByPk(userId);
   if (!user) {
-    // If the token is valid but the user doesn't exist, something is wrong (e.g., user was deleted).
+    // Si el token es válido pero el usuario ya no existe, algo ocurrió (p. ej. fue eliminado)
     throw createHttpError(
       404,
       "User associated with this token no longer exists."
@@ -265,7 +313,8 @@ async function verifyToken(userId) {
 }
 
 /**
- * Verifies if a password reset code is valid.
+ * Verifica si un código de restablecimiento de contraseña es válido y no ha caducado.
+ * @param {{email:string, code:string}} data
  */
 async function verifyResetCode(data) {
   const { error, value } = verifyCodeDto.validate(data);
@@ -285,6 +334,7 @@ async function verifyResetCode(data) {
   }
 }
 
+// Exporta las funciones del servicio
 module.exports = {
   register,
   login,
