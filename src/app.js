@@ -1,6 +1,8 @@
 // filepath: app.js
 const express = require('express');
 const cors = require('cors');
+const compression = require('compression');
+const helmet = require('helmet');
 
 // Inicializar modelos y conexión a la base de datos
 require('./models/index');
@@ -17,14 +19,29 @@ const adminRouter = require('./routers/admin-router');
 const errorHandler = require('./middleware/error-handler');
 const app = express();
 
+// Seguridad y configuración de app
+app.disable('x-powered-by');
+app.set('trust proxy', 1);
+
 // Configuración de CORS
 app.use(cors({
     // CAMBIAR A LA URL DONDE REALMENTE CORRE TU FRONTEND (Vite)
-    origin: 'http://localhost:5173', // <--- ¡CAMBIADO A 5173!
+    origin: process.env.CORS_ORIGIN || 'http://localhost:5173', // <--- ¡CAMBIADO A 5173!
     credentials: true // Si necesitas enviar cookies o cabeceras de autorización
 }));
 
-app.use(express.json()); // Middleware para parsear JSON en el cuerpo de las solicitudes
+// Seguridad de cabeceras
+app.use(helmet({
+  contentSecurityPolicy: false
+}));
+
+// Compresión HTTP
+app.use(compression({
+  level: 6,
+  threshold: 1024
+}));
+
+app.use(express.json({ limit: '1mb' })); // Middleware para parsear JSON en el cuerpo de las solicitudes
 
 // Rutas públicas para el flujo de citas como invitado (sin autenticación)
 app.use('/api/especialidad', especialidadRouter); // GET /api/especialidad

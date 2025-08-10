@@ -3,16 +3,32 @@
 require("dotenv").config();
 const { Sequelize } = require("sequelize");
 
-const sequelize = new Sequelize(
-  process.env.DB_NAME,
-  process.env.DB_USER,
-  process.env.DB_PASS,
-  {
-    host: process.env.DB_HOST,
-    dialect: "postgres",
-    logging: false, // Puedes cambiar a true en desarrollo para ver las consultas SQL
-  }
-);
+const isProduction = process.env.NODE_ENV === 'production';
+const isTest = process.env.NODE_ENV === 'test';
+
+let sequelize;
+if (isTest) {
+  sequelize = new Sequelize('sqlite::memory:', {
+    logging: false
+  });
+} else {
+  sequelize = new Sequelize(
+    process.env.DB_NAME,
+    process.env.DB_USER,
+    process.env.DB_PASS,
+    {
+      host: process.env.DB_HOST,
+      dialect: "postgres",
+      logging: isProduction ? false : console.debug,
+      pool: {
+        max: Number(process.env.DB_POOL_MAX || 10),
+        min: Number(process.env.DB_POOL_MIN || 0),
+        acquire: Number(process.env.DB_POOL_ACQUIRE_MS || 30000),
+        idle: Number(process.env.DB_POOL_IDLE_MS || 10000)
+      }
+    }
+  );
+}
 
 // Importa tus modelos
 const User = require('./user-model')(sequelize);

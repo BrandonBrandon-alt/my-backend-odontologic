@@ -4,6 +4,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node src/index.js",
+    "start:prod": "cross-env NODE_ENV=production node src/index.js",
     "dev": "nodemon src/index.js",
     "test": "NODE_ENV=test jest --detectOpenHandles"
   },
@@ -27,13 +28,16 @@
     "pg": "^8.16.0",
     "pg-hstore": "^2.3.4",
     "rate-limiter-flexible": "^7.1.1",
-    "sequelize": "^6.37.7"
+    "sequelize": "^6.37.7",
+    "compression": "^1.7.4",
+    "helmet": "^7.1.0"
   },
   "devDependencies": {
     "cross-env": "^7.0.3",
     "jest": "^30.0.0",
     "sequelize-cli": "^6.6.3",
     "sequelize-mock": "^0.10.2",
-    "supertest": "^7.1.1"
+    "supertest": "^7.1.1",
+    "sqlite3": "^5.1.7"
   }
 }
