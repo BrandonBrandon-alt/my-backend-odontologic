@@ -1,5 +1,11 @@
+/**
+ * Middleware de validación de datos de contacto usando express-validator.
+ * Define reglas para nombre, email, teléfono, asunto y mensaje; y un manejador
+ * para formatear y devolver errores de validación.
+ */
 const { body, validationResult } = require('express-validator');
 
+// Reglas de validación para el formulario de contacto
 const contactValidation = [
   body('name')
     .trim()
@@ -36,6 +42,7 @@ const contactValidation = [
     .withMessage('El mensaje contiene caracteres no permitidos')
 ];
 
+// Middleware para manejar y formatear errores de validación
 const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
