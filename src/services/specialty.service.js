@@ -4,6 +4,7 @@ const createSpecialtyDto = require("../dtos/specialty/create-specialty.dto");
 const updateSpecialtyDto = require("../dtos/specialty/update-specialty.dto");
 // This DTO is for formatting the output sent to the client.
 const SpecialtyOutputDto = require("../dtos/specialty/specialty-output.dto");
+const cache = require("../utils/cache");
 
 /**
  * Creates a standard error object with a status code.
@@ -17,16 +18,25 @@ const createHttpError = (status, message) => {
   return error;
 };
 
+const CACHE_TTL_MS = parseInt(process.env.CACHE_TTL_MS || '60000', 10);
+const CACHE_KEYS = {
+  all: 'specialties:all',
+  byId: (id) => `specialties:${id}`,
+};
+
 /**
  * Retrieves all active specialties, ordered by name.
  * @returns {Promise<SpecialtyOutputDto[]>} A list of active specialties.
  */
 async function getAll() {
-  const specialties = await Specialty.findAll({
-    where: { is_active: true },
-    order: [["name", "ASC"]],
+  return cache.wrap(CACHE_KEYS.all, CACHE_TTL_MS, async () => {
+    const specialties = await Specialty.findAll({
+      where: { is_active: true },
+      attributes: ['id', 'name', 'description', 'is_active'],
+      order: [["name", "ASC"]],
+    });
+    return SpecialtyOutputDto.fromList(specialties);
   });
-  return SpecialtyOutputDto.fromList(specialties);
 }
 
 /**
@@ -36,13 +46,16 @@ async function getAll() {
  * @throws {Error} Throws a 404 error if the specialty is not found.
  */
 async function getById(id) {
-  const specialty = await Specialty.findOne({
-    where: { id, is_active: true },
+  return cache.wrap(CACHE_KEYS.byId(id), CACHE_TTL_MS, async () => {
+    const specialty = await Specialty.findOne({
+      where: { id, is_active: true },
+      attributes: ['id', 'name', 'description', 'is_active'],
+    });
+    if (!specialty) {
+      throw createHttpError(404, "Specialty not found");
+    }
+    return new SpecialtyOutputDto(specialty);
   });
-  if (!specialty) {
-    throw createHttpError(404, "Specialty not found");
-  }
-  return new SpecialtyOutputDto(specialty);
 }
 
 /**
@@ -67,6 +80,9 @@ async function create(specialtyData) {
   }
 
   const newSpecialty = await Specialty.create(value);
+  // Invalidate caches
+  cache.del(CACHE_KEYS.all);
+  cache.del(CACHE_KEYS.byId(newSpecialty.id));
   return new SpecialtyOutputDto(newSpecialty);
 }
 
@@ -102,6 +118,9 @@ async function update(id, specialtyData) {
   }
 
   await specialty.update(value);
+  // Invalidate caches
+  cache.del(CACHE_KEYS.all);
+  cache.del(CACHE_KEYS.byId(id));
   return new SpecialtyOutputDto(specialty);
 }
 
@@ -118,6 +137,9 @@ async function deactivate(id) {
   }
 
   await specialty.update({ is_active: false });
+  // Invalidate caches
+  cache.del(CACHE_KEYS.all);
+  cache.del(CACHE_KEYS.byId(id));
   return { message: "Specialty deactivated successfully." };
 }
 
