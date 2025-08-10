@@ -39,5 +39,9 @@
     "sequelize-mock": "^0.10.2",
     "supertest": "^7.1.1",
     "sqlite3": "^5.1.7"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "setupFilesAfterEnv": ["<rootDir>/src/tests/test-setup.js"]
   }
 }

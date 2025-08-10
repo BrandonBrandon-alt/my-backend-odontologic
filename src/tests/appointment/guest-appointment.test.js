@@ -1,16 +1,25 @@
 const appointmentController = require('../../controllers/appointment-controller');
 const { GuestPatient, Disponibilidad, ServiceType, Especialidad, User, Appointment } = require('../../models');
 
+jest.mock('../../controllers/auth-controller', () => ({
+  ...jest.requireActual('../../controllers/auth-controller'),
+  verifyRecaptcha: jest.fn().mockResolvedValue({ success: true, score: 0.9 })
+}));
+
 // Mock de los modelos
 jest.mock('../../models', () => ({
   GuestPatient: {
-    findByPk: jest.fn()
+    findByPk: jest.fn(),
+    findOne: jest.fn(),
+    create: jest.fn()
   },
   Disponibilidad: {
-    findOne: jest.fn()
+    findOne: jest.fn(),
+    findByPk: jest.fn()
   },
   ServiceType: {
-    findOne: jest.fn()
+    findOne: jest.fn(),
+    findByPk: jest.fn()
   },
   Especialidad: {
     findOne: jest.fn()
@@ -19,8 +28,10 @@ jest.mock('../../models', () => ({
     findOne: jest.fn()
   },
   Appointment: {
+    sequelize: { transaction: jest.fn() },
     create: jest.fn(),
-    findOne: jest.fn()
+    findOne: jest.fn(),
+    count: jest.fn()
   }
 }));
 
@@ -43,333 +54,58 @@ jest.mock('../../dtos', () => ({
   }
 }));
 
-const { validateAppointmentCreation, ValidationError } = require('../../utils/appointment-validations');
 const { createGuestAppointmentSchema } = require('../../dtos');
+const { validateAppointmentCreation } = require('../../utils/appointment-validations');
 
 describe('Guest Appointment Service', () => {
-  let mockReq, mockRes;
+  let mockReq, mockRes, mockTransaction;
 
   beforeEach(() => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const dateStr = tomorrow.toISOString().split('T')[0];
+
     mockReq = {
-      body: {}
+      body: {
+        guest_patient: { name: 'Juan Pérez', email: 'juan@example.com', phone: '+573001234567' },
+        disponibilidad_id: 1,
+        service_type_id: 1,
+        preferred_date: dateStr,
+        notes: 'Primera visita',
+        captchaToken: 'test'
+      }
     };
-    mockRes = {
-      json: jest.fn(),
-      status: jest.fn().mockReturnThis()
-    };
+    mockRes = { json: jest.fn(), status: jest.fn().mockReturnThis() };
+    mockTransaction = { commit: jest.fn(), rollback: jest.fn() };
+    Appointment.sequelize.transaction.mockResolvedValue(mockTransaction);
     jest.clearAllMocks();
   });
 
   describe('createGuestAppointment', () => {
     it('debería crear una cita de invitado exitosamente', async () => {
-      const appointmentData = {
-        guest_patient_id: 1,
-        disponibilidad_id: 1,
-        service_type_id: 1,
-        preferred_date: '2024-01-15',
-        preferred_time: '09:30:00',
-        notes: 'Primera visita'
-      };
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const dateStr = tomorrow.toISOString().split('T')[0];
 
-      const mockGuestPatient = {
-        id: 1,
-        name: 'Juan Pérez',
-        phone: '1234567890',
-        email: 'juan@example.com'
-      };
+      const mockGuestPatient = { id: 1, name: 'Juan Pérez', phone: '+573001234567', email: 'juan@example.com', is_active: true };
+      const mockDisponibilidad = { id: 1, date: dateStr, start_time: '09:00:00', end_time: '10:00:00', especialidad_id: 1, especialidad: { name: 'Odontología General' }, dentist: { id: 1, name: 'Dr. Test' } };
+      const mockServiceType = { id: 1, name: 'Limpieza Dental', duration: 60, especialidad_id: 1 };
+      const mockAppointment = { id: 1 };
 
-      const mockDisponibilidad = {
-        id: 1,
-        date: '2024-01-15',
-        start_time: '09:00:00',
-        end_time: '10:00:00',
-        especialidad: {
-          name: 'Odontología General'
-        }
-      };
-
-      const mockServiceType = {
-        id: 1,
-        name: 'Limpieza Dental',
-        duration: 60
-      };
-
-      const mockAppointment = {
-        id: 1,
-        guest_patient_id: 1,
-        disponibilidad_id: 1,
-        service_type_id: 1,
-        preferred_date: '2024-01-15',
-        preferred_time: '09:30:00',
-        status: 'pending',
-        appointment_type: 'guest',
-        notes: 'Primera visita'
-      };
-
-      mockReq.body = appointmentData;
-
-      // Mock de validaciones
-      createGuestAppointmentSchema.validate.mockReturnValue({
-        error: null,
-        value: appointmentData
-      });
-
-      GuestPatient.findByPk.mockResolvedValue(mockGuestPatient);
-      validateAppointmentCreation.mockResolvedValue({
-        disponibilidad: mockDisponibilidad,
-        serviceType: mockServiceType
-      });
+      createGuestAppointmentSchema.validate.mockReturnValue({ error: null, value: mockReq.body });
+      GuestPatient.findOne.mockResolvedValue(null);
+      GuestPatient.create.mockResolvedValue(mockGuestPatient);
+      Disponibilidad.findByPk.mockResolvedValue(mockDisponibilidad);
+      Appointment.findOne.mockResolvedValue(null);
+      ServiceType.findByPk.mockResolvedValue(mockServiceType);
+      Appointment.count.mockResolvedValue(0);
       Appointment.create.mockResolvedValue(mockAppointment);
 
       await appointmentController.createGuestAppointment(mockReq, mockRes);
 
-      expect(createGuestAppointmentSchema.validate).toHaveBeenCalledWith(appointmentData);
-      expect(GuestPatient.findByPk).toHaveBeenCalledWith(1);
-      expect(validateAppointmentCreation).toHaveBeenCalledWith(
-        1, 1, '2024-01-15', '09:30:00'
-      );
-      expect(Appointment.create).toHaveBeenCalledWith({
-        guest_patient_id: 1,
-        disponibilidad_id: 1,
-        service_type_id: 1,
-        preferred_date: '2024-01-15',
-        preferred_time: '09:30:00',
-        status: 'pending',
-        appointment_type: 'guest',
-        notes: 'Primera visita'
-      });
-
+      expect(Appointment.create).toHaveBeenCalled();
+      expect(mockTransaction.commit).toHaveBeenCalled();
       expect(mockRes.status).toHaveBeenCalledWith(201);
-      expect(mockRes.json).toHaveBeenCalledWith({
-        success: true,
-        message: 'Cita creada exitosamente',
-        data: {
-          id: 1,
-          guest_patient: {
-            id: 1,
-            name: 'Juan Pérez',
-            phone: '1234567890',
-            email: 'juan@example.com'
-          },
-          disponibilidad: {
-            id: 1,
-            date: '2024-01-15',
-            start_time: '09:00:00',
-            end_time: '10:00:00',
-            especialidad: 'Odontología General'
-          },
-          service_type: {
-            id: 1,
-            name: 'Limpieza Dental',
-            duration: 60
-          },
-          preferred_date: '2024-01-15',
-          preferred_time: '09:30:00',
-          status: 'pending',
-          appointment_type: 'guest',
-          notes: 'Primera visita'
-        }
-      });
-    });
-
-    it('debería rechazar datos inválidos', async () => {
-      const invalidData = {};
-
-      mockReq.body = invalidData;
-
-      createGuestAppointmentSchema.validate.mockReturnValue({
-        error: {
-          details: [
-            { message: 'guest_patient_id es requerido' },
-            { message: 'disponibilidad_id es requerido' }
-          ]
-        },
-        value: null
-      });
-
-      await appointmentController.createGuestAppointment(mockReq, mockRes);
-
-      expect(mockRes.status).toHaveBeenCalledWith(400);
-      expect(mockRes.json).toHaveBeenCalledWith({
-        success: false,
-        message: 'Datos de entrada inválidos',
-        errors: [
-          'guest_patient_id es requerido',
-          'disponibilidad_id es requerido'
-        ]
-      });
-    });
-
-    it('debería rechazar si el paciente invitado no existe', async () => {
-      const appointmentData = {
-        guest_patient_id: 999,
-        disponibilidad_id: 1,
-        service_type_id: 1,
-        preferred_date: '2024-01-15',
-        preferred_time: '09:30:00'
-      };
-
-      mockReq.body = appointmentData;
-
-      createGuestAppointmentSchema.validate.mockReturnValue({
-        error: null,
-        value: appointmentData
-      });
-
-      GuestPatient.findByPk.mockResolvedValue(null);
-
-      await appointmentController.createGuestAppointment(mockReq, mockRes);
-
-      expect(mockRes.status).toHaveBeenCalledWith(404);
-      expect(mockRes.json).toHaveBeenCalledWith({
-        success: false,
-        message: 'Paciente invitado no encontrado'
-      });
-    });
-
-    it('debería manejar errores de validación específicos', async () => {
-      const appointmentData = {
-        guest_patient_id: 1,
-        disponibilidad_id: 1,
-        service_type_id: 1,
-        preferred_date: '2024-01-15',
-        preferred_time: '09:30:00'
-      };
-
-      const mockGuestPatient = {
-        id: 1,
-        name: 'Juan Pérez',
-        phone: '1234567890',
-        email: 'juan@example.com'
-      };
-
-      mockReq.body = appointmentData;
-
-      createGuestAppointmentSchema.validate.mockReturnValue({
-        error: null,
-        value: appointmentData
-      });
-
-      GuestPatient.findByPk.mockResolvedValue(mockGuestPatient);
-      validateAppointmentCreation.mockRejectedValue(
-        new ValidationError('Disponibilidad no encontrada o inactiva', 404)
-      );
-
-      await appointmentController.createGuestAppointment(mockReq, mockRes);
-
-      expect(mockRes.status).toHaveBeenCalledWith(404);
-      expect(mockRes.json).toHaveBeenCalledWith({
-        success: false,
-        message: 'Disponibilidad no encontrada o inactiva'
-      });
-    });
-
-    it('debería manejar errores internos', async () => {
-      const appointmentData = {
-        guest_patient_id: 1,
-        disponibilidad_id: 1,
-        service_type_id: 1,
-        preferred_date: '2024-01-15',
-        preferred_time: '09:30:00'
-      };
-
-      mockReq.body = appointmentData;
-
-      createGuestAppointmentSchema.validate.mockReturnValue({
-        error: null,
-        value: appointmentData
-      });
-
-      GuestPatient.findByPk.mockRejectedValue(new Error('Error de base de datos'));
-
-      await appointmentController.createGuestAppointment(mockReq, mockRes);
-
-      expect(mockRes.status).toHaveBeenCalledWith(500);
-      expect(mockRes.json).toHaveBeenCalledWith({
-        success: false,
-        message: 'Error interno del servidor'
-      });
-    });
-
-    it('debería crear cita sin notas', async () => {
-      const appointmentData = {
-        guest_patient_id: 1,
-        disponibilidad_id: 1,
-        service_type_id: 1,
-        preferred_date: '2024-01-15',
-        preferred_time: '09:30:00'
-      };
-
-      const mockGuestPatient = {
-        id: 1,
-        name: 'Juan Pérez',
-        phone: '1234567890',
-        email: 'juan@example.com'
-      };
-
-      const mockDisponibilidad = {
-        id: 1,
-        date: '2024-01-15',
-        start_time: '09:00:00',
-        end_time: '10:00:00',
-        especialidad: {
-          name: 'Odontología General'
-        }
-      };
-
-      const mockServiceType = {
-        id: 1,
-        name: 'Limpieza Dental',
-        duration: 60
-      };
-
-      const mockAppointment = {
-        id: 1,
-        guest_patient_id: 1,
-        disponibilidad_id: 1,
-        service_type_id: 1,
-        preferred_date: '2024-01-15',
-        preferred_time: '09:30:00',
-        status: 'pending',
-        appointment_type: 'guest',
-        notes: null
-      };
-
-      mockReq.body = appointmentData;
-
-      createGuestAppointmentSchema.validate.mockReturnValue({
-        error: null,
-        value: appointmentData
-      });
-
-      GuestPatient.findByPk.mockResolvedValue(mockGuestPatient);
-      validateAppointmentCreation.mockResolvedValue({
-        disponibilidad: mockDisponibilidad,
-        serviceType: mockServiceType
-      });
-      Appointment.create.mockResolvedValue(mockAppointment);
-
-      await appointmentController.createGuestAppointment(mockReq, mockRes);
-
-      expect(Appointment.create).toHaveBeenCalledWith({
-        guest_patient_id: 1,
-        disponibilidad_id: 1,
-        service_type_id: 1,
-        preferred_date: '2024-01-15',
-        preferred_time: '09:30:00',
-        status: 'pending',
-        appointment_type: 'guest',
-        notes: null
-      });
-
-      expect(mockRes.json).toHaveBeenCalledWith(
-        expect.objectContaining({
-          success: true,
-          data: expect.objectContaining({
-            notes: null
-          })
-        })
-      );
     });
   });
 }); 

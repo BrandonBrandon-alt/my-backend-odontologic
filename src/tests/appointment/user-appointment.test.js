@@ -1,7 +1,4 @@
-const appointmentController = require('../../controllers/appointment-controller');
-const { createUserAppointmentSchema } = require('../../dtos');
-
-// Mock de los modelos
+// Mock de los modelos y dependencias primero
 jest.mock('../../models', () => ({
   Appointment: {
     sequelize: {
@@ -26,46 +23,48 @@ jest.mock('../../models', () => ({
   }
 }));
 
-// Mock de Joi
+// Mock de Joi DTO
 jest.mock('../../dtos', () => ({
   createUserAppointmentSchema: {
     validate: jest.fn()
   }
 }));
 
-// Mock del mailer
+// Mock mailer
 jest.mock('../../utils/mailer', () => ({
   sendAppointmentConfirmationEmail: jest.fn()
 }));
 
 const { Appointment, User, Disponibilidad, ServiceType } = require('../../models');
+const { createUserAppointmentSchema } = require('../../dtos');
 const { sendAppointmentConfirmationEmail } = require('../../utils/mailer');
+
+const appointmentController = require('../../controllers/appointment-controller');
 
 describe('Appointment Controller - createUserAppointment', () => {
   let mockReq, mockRes, mockTransaction;
 
   beforeEach(() => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
     mockReq = {
-      user: {
-        id: 1,
-        email: 'test@example.com',
-        role: 'user'
-      },
-      body: {}
+      user: { id: 1, email: 'test@example.com', role: 'user' },
+      body: {
+        patient_id: 1,
+        disponibilidad_id: 1,
+        service_type_id: 1,
+        preferred_date: tomorrowStr,
+        notes: 'Notas de prueba'
+      }
     };
-    
-    mockRes = {
-      json: jest.fn(),
-      status: jest.fn().mockReturnThis()
-    };
-
-    mockTransaction = {
-      commit: jest.fn(),
-      rollback: jest.fn()
-    };
-
-    Appointment.sequelize.transaction.mockResolvedValue(mockTransaction);
+    mockRes = { json: jest.fn(), status: jest.fn().mockReturnThis() };
+    mockTransaction = { commit: jest.fn(), rollback: jest.fn() };
     jest.clearAllMocks();
+    Appointment.sequelize.transaction.mockResolvedValue(mockTransaction);
+    // Valor por defecto para evitar fallos de destructuring
+    createUserAppointmentSchema.validate.mockReturnValue({ error: null, value: mockReq.body });
   });
 
   describe('Validaciones de autenticación', () => {
@@ -232,7 +231,8 @@ describe('Appointment Controller - createUserAppointment', () => {
           date: tomorrowStr,
           start_time: '09:00:00',
           end_time: '10:00:00',
-          especialidad: { name: 'Odontología' },
+          especialidad_id: 1,
+          especialidad: { name: 'Odontología', especialidad_id: 1 },
           dentist: { name: 'Dr. Test' }
         };
 
@@ -271,7 +271,8 @@ describe('Appointment Controller - createUserAppointment', () => {
           date: tomorrowStr,
           start_time: '09:00:00',
           end_time: '10:00:00',
-          especialidad: { name: 'Odontología' },
+          especialidad_id: 1,
+          especialidad: { name: 'Odontología', especialidad_id: 1 },
           dentist: { name: 'Dr. Test' }
         };
 
@@ -311,7 +312,8 @@ describe('Appointment Controller - createUserAppointment', () => {
           date: tomorrowStr,
           start_time: '09:00:00',
           end_time: '10:00:00',
-          especialidad: { name: 'Odontología' },
+          especialidad_id: 1,
+          especialidad: { name: 'Odontología', especialidad_id: 1 },
           dentist: { name: 'Dr. Test' }
         };
         const mockServiceType = {
@@ -359,7 +361,8 @@ describe('Appointment Controller - createUserAppointment', () => {
           date: tomorrowStr,
           start_time: '09:00:00',
           end_time: '10:00:00',
-          especialidad: { name: 'Odontología' },
+          especialidad_id: 1,
+          especialidad: { name: 'Odontología', especialidad_id: 1 },
           dentist: { name: 'Dr. Test' }
         };
         const mockServiceType = {
@@ -421,7 +424,8 @@ describe('Appointment Controller - createUserAppointment', () => {
           date: tomorrowStr,
           start_time: '09:00:00',
           end_time: '10:00:00',
-          especialidad: { name: 'Odontología' },
+          especialidad_id: 1,
+          especialidad: { name: 'Odontología', especialidad_id: 1 },
           dentist: { name: 'Dr. Test' }
         };
         const mockServiceType = {
@@ -507,7 +511,8 @@ describe('Appointment Controller - createUserAppointment', () => {
           date: tomorrowStr,
           start_time: '09:00:00',
           end_time: '10:00:00',
-          especialidad: { name: 'Odontología' },
+          especialidad_id: 1,
+          especialidad: { name: 'Odontología', especialidad_id: 1 },
           dentist: { name: 'Dr. Test' }
         };
         const mockServiceType = {
@@ -609,7 +614,8 @@ describe('Appointment Controller - createUserAppointment', () => {
           date: tomorrowStr,
           start_time: '09:00:00',
           end_time: '10:00:00',
-          especialidad: { name: 'Odontología' },
+          especialidad_id: 1,
+          especialidad: { name: 'Odontología', especialidad_id: 1 },
           dentist: { name: 'Dr. Test' }
         };
         const mockServiceType = {

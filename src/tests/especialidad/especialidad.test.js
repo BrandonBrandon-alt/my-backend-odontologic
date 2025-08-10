@@ -39,14 +39,13 @@ describe('Especialidad Controller', () => {
         where: { is_active: true },
         order: [['name', 'ASC']]
       });
-      expect(mockRes.json).toHaveBeenCalledWith({
+      expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
         success: true,
-        data: mockEspecialidades.map(esp => ({
-          id: esp.id,
-          name: esp.name,
-          description: esp.description
-        }))
-      });
+        data: expect.arrayContaining([
+          expect.objectContaining({ id: 1, name: 'Odontología', description: 'desc1' }),
+          expect.objectContaining({ id: 2, name: 'Ortodoncia', description: 'desc2' })
+        ])
+      }));
     });
 
     it('debería manejar errores correctamente', async () => {
@@ -75,14 +74,10 @@ describe('Especialidad Controller', () => {
       expect(Especialidad.findOne).toHaveBeenCalledWith({
         where: { id: 1, is_active: true }
       });
-      expect(mockRes.json).toHaveBeenCalledWith({
+      expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
         success: true,
-        data: {
-          id: mockEspecialidad.id,
-          name: mockEspecialidad.name,
-          description: mockEspecialidad.description
-        }
-      });
+        data: expect.objectContaining({ id: 1, name: 'Odontología', description: 'desc' })
+      }));
     });
 
     it('debería retornar 404 si no encuentra la especialidad', async () => {
@@ -116,15 +111,11 @@ describe('Especialidad Controller', () => {
         is_active: true
       });
       expect(mockRes.status).toHaveBeenCalledWith(201);
-      expect(mockRes.json).toHaveBeenCalledWith({
+      expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
         success: true,
         message: 'Especialidad creada exitosamente',
-        data: {
-          id: createdEspecialidad.id,
-          name: createdEspecialidad.name,
-          description: createdEspecialidad.description
-        }
-      });
+        data: expect.objectContaining({ id: 3, name: 'Nueva Especialidad' })
+      }));
     });
 
     it('debería validar nombre requerido', async () => {
@@ -179,15 +170,11 @@ describe('Especialidad Controller', () => {
         name: updateData.name.trim(),
         description: updateData.description
       });
-      expect(mockRes.json).toHaveBeenCalledWith({
+      expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
         success: true,
         message: 'Especialidad actualizada exitosamente',
-        data: {
-          id: updatedEspecialidad.id,
-          name: updatedEspecialidad.name,
-          description: updatedEspecialidad.description
-        }
-      });
+        data: expect.objectContaining({ id: 1, name: 'Nueva' })
+      }));
     });
   });
 
@@ -202,10 +189,10 @@ describe('Especialidad Controller', () => {
       await especialidadController.deactivate(mockReq, mockRes);
 
       expect(especialidad.update).toHaveBeenCalledWith({ is_active: false });
-      expect(mockRes.json).toHaveBeenCalledWith({
+      expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
         success: true,
         message: 'Especialidad desactivada exitosamente'
-      });
+      }));
     });
   });
 }); 

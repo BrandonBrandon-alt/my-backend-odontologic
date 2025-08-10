@@ -47,7 +47,7 @@ app.use(express.json({ limit: '1mb' })); // Middleware para parsear JSON en el c
 app.use('/api/especialidad', especialidadRouter); // GET /api/especialidad
 app.use('/api/service-type', serviceTypeRouter); // GET /api/service-type/especialidad/:id
 app.use('/api/disponibilidad', disponibilidadRouter); // GET /api/disponibilidad/especialidad/:id
-app.use('/api/guest-patient', guestPatientRouter); // POST /api/guest-patient
+app.use('/api/guest-patients', guestPatientRouter); // POST /api/guest-patients
 app.use('/api/appointments', appointmentRouter); // POST /api/appointments/guest
 
 // Rutas de contacto

@@ -2,6 +2,7 @@ const authController = require('../../controllers/auth-controller');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const recaptchaMiddleware = require('../../middleware/recaptcha-middleware');
+const { verifyRecaptcha } = require('../../controllers/auth-controller');
 
 // Mock de los modelos
 jest.mock('../../models', () => ({
@@ -37,6 +38,11 @@ jest.mock('../../utils/mailer', () => ({
 // Mock de axios para reCAPTCHA
 jest.mock('axios', () => ({
   post: jest.fn()
+}));
+
+jest.mock('../../controllers/auth-controller', () => ({
+  ...jest.requireActual('../../controllers/auth-controller'),
+  verifyRecaptcha: jest.fn().mockResolvedValue({ success: true, score: 0.9 })
 }));
 
 const { User } = require('../../models');
@@ -186,7 +192,7 @@ describe('Auth Controller', () => {
         birth_date: '1990-05-15',
         captchaToken: 'invalid-captcha-token'
       };
-      axios.post.mockResolvedValue({ data: { success: false } });
+      verifyRecaptcha.mockResolvedValueOnce({ success: false, score: 0.1 });
       mockReq.body = userData;
       let middlewareCalled = false;
       await recaptchaMiddleware(mockReq, mockRes, () => { middlewareCalled = true; });
@@ -402,7 +408,7 @@ describe('Auth Controller', () => {
         password: 'password123',
         captchaToken: 'invalid-captcha-token'
       };
-      axios.post.mockResolvedValue({ data: { success: false } });
+      verifyRecaptcha.mockResolvedValueOnce({ success: false, score: 0.1 });
       mockReq.body = loginData;
       let middlewareCalled = false;
       await recaptchaMiddleware(mockReq, mockRes, () => { middlewareCalled = true; });
