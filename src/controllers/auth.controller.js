@@ -89,9 +89,18 @@ const verifyResetCode = asyncHandler(async (req, res, next) => {
  * Genera un nuevo access token a partir de un refresh token.
  */
 const refreshToken = asyncHandler(async (req, res, next) => {
-  // El servicio espera un objeto del tipo { token: '...' }
+  // Aceptar refreshToken desde body o cookie
+  const bodyToken = req.body && req.body.refreshToken;
+  const cookieToken =
+    req.cookies && (req.cookies.refreshToken || req.cookies.rt);
+  const token = bodyToken || cookieToken;
+
+  if (!token) {
+    return res.status(400).json({ message: "refreshToken is required" });
+  }
+
   const { accessToken } = await authService.refreshToken({
-    token: req.body.refreshToken,
+    token,
   });
   res.status(200).json({ accessToken });
 });
@@ -100,9 +109,16 @@ const refreshToken = asyncHandler(async (req, res, next) => {
  * Cierra sesión eliminando el refresh token en servidor.
  */
 const logout = asyncHandler(async (req, res, next) => {
-  // El servicio espera un objeto del tipo { token: '...' }
-  await authService.logout({ token: req.body.refreshToken });
-  res.status(204).send(); // 204 No Content es apropiado para logout exitoso
+  const bodyToken = req.body && req.body.refreshToken;
+  const cookieToken =
+    req.cookies && (req.cookies.refreshToken || req.cookies.rt);
+  const token = bodyToken || cookieToken;
+  if (!token) {
+    // No provocar error 500: simplemente responder 204 idempotente
+    return res.status(204).send();
+  }
+  await authService.logout({ token });
+  res.status(204).send();
 });
 
 /**
