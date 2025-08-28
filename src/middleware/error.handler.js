@@ -5,10 +5,13 @@
  */
 // Middleware global de manejo de errores
 module.exports = (err, req, res, next) => {
-    console.error('Error no manejado:', err);
-    const status = err.status || 500; // Usa el status del error o 500
-    res.status(status).json({
-        error: err.message || 'Error interno del servidor',
-        details: err.details || undefined
-    });
-}; 
+  console.error("Error no manejado:", err);
+  const status = err.status || 500; // Usa el status del error o 500
+  // Código de error simple derivado del status si no existe
+  const code = err.code || undefined;
+  res.status(status).json({
+    message: err.message || "Error interno del servidor",
+    code,
+    details: err.details || undefined,
+  });
+};

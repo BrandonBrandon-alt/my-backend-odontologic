@@ -11,7 +11,16 @@ const recaptchaMiddleware = async (req, res, next) => {
   // El frontend envía el token como "recaptchaToken"
   const { recaptchaToken } = req.body;
 
+  // Permitir desactivar reCAPTCHA en entornos de desarrollo / pruebas controladas
+  const bypass =
+    process.env.DISABLE_RECAPTCHA === "true" ||
+    process.env.NODE_ENV === "development";
+
   if (!recaptchaToken) {
+    if (bypass) {
+      console.warn("[reCAPTCHA] Bypass activo: petición sin token permitida.");
+      return next();
+    }
     return res.status(400).json({
       message: "El token de reCAPTCHA es requerido.",
     });

@@ -56,11 +56,7 @@ const createContactMessageSchema = Joi.object({
 });
 
 const validateContactData = (data) => {
-  // Posible error: `contactSchema` no está definido; quizá se quiso usar `createContactMessageSchema`.
-  return contactSchema.validate(data, { abortEarly: false });
+  return createContactMessageSchema.validate(data, { abortEarly: false });
 };
 
-module.exports = {
-  createContactMessageSchema,
-  validateContactData,
-};
+module.exports = createContactMessageSchema;
