@@ -22,13 +22,41 @@ const AppointmentOutputDto = require("../dtos//appointment/appointment-output.dt
  * Crea un objeto de error HTTP con un código de estado.
  * @param {number} status - Código de estado HTTP.
  * @param {string} message - Mensaje descriptivo del error.
+ * @param {object} [details=null] - Detalles adicionales del error.
  * @returns {Error} Error con propiedad `status` asignada.
  */
-const createHttpError = (status, message) => {
+const createHttpError = (status, message, details = null) => {
   const error = new Error(message);
   error.status = status;
+  if (details) {
+    error.details = details;
+  }
   return error;
 };
+
+/**
+ * Valida que una fecha/hora de cita no esté en el pasado.
+ * @param {string} date - Fecha en formato YYYY-MM-DD
+ * @param {string} startTime - Hora en formato HH:MM:SS
+ * @returns {boolean} True si la fecha es válida (futura)
+ */
+const isValidAppointmentDateTime = (date, startTime) => {
+  const appointmentDateTime = new Date(`${date}T${startTime}`);
+  const now = new Date();
+  return appointmentDateTime > now;
+};
+
+/**
+ * Normaliza los datos de entrada para invitados.
+ * @param {object} data - Datos del invitado
+ * @returns {object} Datos normalizados
+ */
+const normalizeGuestData = (data) => ({
+  name: data.name?.trim(),
+  email: data.email?.toLowerCase().trim(),
+  phone: data.phone?.trim(),
+  notes: data.notes?.trim() || null,
+});
 
 /**
  * Obtiene una cita por su ID incluyendo todas las relaciones necesarias para la salida.
@@ -65,6 +93,7 @@ const findFullAppointmentById = async (appointmentId) => {
  * Crea una nueva cita para un invitado o un usuario registrado.
  * - Valida la entrada con el DTO adecuado según si es invitado o usuario.
  * - Verifica que la disponibilidad y el tipo de servicio estén activos.
+ * - Previene conflictos de horarios verificando citas existentes.
  * - Si es invitado, crea o reutiliza un registro de `GuestPatient` por email.
  * - Crea la cita dentro de una transacción para asegurar consistencia.
  * @param {object} appointmentData - Datos de la nueva cita.
@@ -75,17 +104,21 @@ async function create(appointmentData, user = null) {
   const isGuest = !user; // Determina si la creación es para un invitado (no autenticado)
   const schema = isGuest ? createGuestAppointmentDto : createUserAppointmentDto; // Selecciona el esquema de validación adecuado
 
+  // 🔍 PASO 1: Validación de entrada con DTO
   const { error, value } = schema.validate(appointmentData); // Valida los datos de entrada
   if (error) {
     // Si la validación falla, se lanza un error 400 con el detalle
-    throw createHttpError(400, error.details[0].message);
+    throw createHttpError(400, `Validation error: ${error.details[0].message}`);
   }
 
-  // --- Validación de reglas de negocio ---
+  // 🔍 PASO 2: Validaciones de reglas de negocio
+  
+  // Verifica que la disponibilidad existe, está activa y no está en el pasado
   const availability = await Availability.findOne({
-    where: { id: value.availability_id, is_active: true }, // La disponibilidad debe existir y estar activa
-    attributes: ['id'],
+    where: { id: value.availability_id, is_active: true },
+    attributes: ['id', 'date', 'start_time', 'end_time'],
   });
+  
   if (!availability) {
     throw createHttpError(
       404,
@@ -93,55 +126,114 @@ async function create(appointmentData, user = null) {
     );
   }
 
+  // Validación adicional: verificar que la fecha no sea en el pasado
+  if (!isValidAppointmentDateTime(availability.date, availability.start_time)) {
+    throw createHttpError(
+      400,
+      "Cannot book appointments in the past. Please select a future date and time.",
+      { 
+        appointmentDate: availability.date, 
+        appointmentTime: availability.start_time 
+      }
+    );
+  }
+
+  // Verifica que el tipo de servicio existe y está activo
   const serviceType = await ServiceType.findOne({
-    where: { id: value.service_type_id, is_active: true }, // El tipo de servicio debe existir y estar activo
-    attributes: ['id'],
+    where: { id: value.service_type_id, is_active: true },
+    attributes: ['id', 'name', 'duration'],
   });
+  
   if (!serviceType) {
     throw createHttpError(
       404,
       "The selected service type was not found or is not active."
     );
   }
-  // --- Fin de validación ---
 
-  // Se utiliza una transacción para garantizar que la creación del invitado (si aplica)
-  // y la creación de la cita sean atómicas (todas o ninguna)
+  // 🔍 PASO 3: Verificar conflictos de horarios
+  const existingAppointment = await Appointment.findOne({
+    where: {
+      availability_id: value.availability_id,
+      status: ['pending', 'confirmed'] // Solo considerar citas activas
+    },
+    attributes: ['id']
+  });
+
+  if (existingAppointment) {
+    throw createHttpError(
+      409, // Conflict
+      "This time slot is already booked. Please select a different time."
+    );
+  }
+
+  // 🔍 PASO 4: Para usuarios registrados, verificar límite de citas pendientes
+  if (!isGuest) {
+    const pendingAppointmentsCount = await Appointment.count({
+      where: {
+        user_id: user.id,
+        status: 'pending'
+      }
+    });
+
+    const MAX_PENDING_APPOINTMENTS = 3; // Configurable
+    if (pendingAppointmentsCount >= MAX_PENDING_APPOINTMENTS) {
+      throw createHttpError(
+        429, // Too Many Requests
+        `You have reached the maximum limit of ${MAX_PENDING_APPOINTMENTS} pending appointments. Please wait for confirmation or cancel existing appointments.`
+      );
+    }
+  }
+
+  // 🔄 PASO 5: Transacción atómica para crear la cita
   const result = await sequelize.transaction(async (t) => {
     let guestPatientId = null; // ID del paciente invitado, si corresponde
 
     if (isGuest) {
-      // Busca un invitado existente por email o crea uno nuevo si no existe
-      const [guest] = await GuestPatient.findOrCreate({
-        where: { email: value.email },
-        defaults: {
-          name: value.name,
-          phone: value.phone,
-          email: value.email,
-        },
-        transaction: t, // Asegura que la operación esté dentro de la transacción
+      // Para invitados: normalizar datos y buscar/crear registro
+      const normalizedData = normalizeGuestData(value);
+      
+      const [guest, created] = await GuestPatient.findOrCreate({
+        where: { email: normalizedData.email },
+        defaults: normalizedData,
+        transaction: t,
       });
-      guestPatientId = guest.id; // Guarda el ID del invitado para asociarlo a la cita
+      
+      guestPatientId = guest.id;
+      
+      // Si el invitado ya existía, actualizar información si es necesaria
+      if (!created && (guest.name !== normalizedData.name || guest.phone !== normalizedData.phone)) {
+        await guest.update({
+          name: normalizedData.name,
+          phone: normalizedData.phone,
+        }, { transaction: t });
+      }
     }
 
-    // Crea la cita con estado inicial "pending"
+    // Crear la cita con estado inicial "pending"
     const newAppointment = await Appointment.create(
       {
-        user_id: isGuest ? null : user.id, // Si es invitado, no hay user_id
-        guest_patient_id: guestPatientId, // Si no es invitado, queda en null
-        availability_id: value.availability_id, // Relaciona la disponibilidad elegida
-        service_type_id: value.service_type_id, // Relaciona el tipo de servicio
-        notes: value.notes, // Notas opcionales
-        status: "pending", // Estado inicial de la cita
+        user_id: isGuest ? null : user.id,
+        guest_patient_id: guestPatientId,
+        availability_id: value.availability_id,
+        service_type_id: value.service_type_id,
+        notes: value.notes?.trim() || null,
+        status: "pending",
       },
       { transaction: t }
     );
 
-    return newAppointment; // Devuelve la cita creada dentro de la transacción
+    // Opcional: Marcar la disponibilidad como reservada
+    // await availability.update({ is_reserved: true }, { transaction: t });
+
+    return newAppointment;
   });
 
-  // Se recupera la cita completa con sus relaciones para la salida
+  // 📤 PASO 6: Recuperar y devolver la cita completa
   const fullAppointment = await findFullAppointmentById(result.id);
+  
+  // Opcional: Aquí podrías agregar lógica para enviar notificaciones
+   await sendAppointmentConfirmationEmail(fullAppointment);
   return new AppointmentOutputDto(fullAppointment);
 }
 

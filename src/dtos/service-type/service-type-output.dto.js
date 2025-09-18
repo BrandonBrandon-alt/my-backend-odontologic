@@ -16,6 +16,7 @@ class ServiceTypeOutputDto {
     this.description = serviceTypeModel.description;
     this.duration = serviceTypeModel.duration;
     this.isActive = serviceTypeModel.is_active;
+    this.specialty_id = serviceTypeModel.specialty_id;
 
     // Si la especialidad viene incluida, formatearla con su propio DTO
     if (serviceTypeModel.specialty) {

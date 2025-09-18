@@ -5,7 +5,11 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "NODE_ENV=test jest --detectOpenHandles"
+    "test": "NODE_ENV=test jest --detectOpenHandles",
+    "seed": "node src/scripts/run-seeders.js",
+    "seed:reset": "node src/scripts/run-seeders.js --reset",
+    "db:seed": "node src/seeders/index.js",
+    "db:reset": "node src/seeders/index.js --reset"
   },
   "keywords": [],
   "author": "",

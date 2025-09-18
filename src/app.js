@@ -30,12 +30,12 @@ app.use(
 app.use(express.json());
 
 // Public routes
-app.use("/api/specialty", specialtyRouter); // GET /api/specialty
-app.use("/api/service-type", serviceTypeRouter); // GET /api/service-type
-app.use("/api/availability", availabilityRouter); // GET /api/availability
+app.use("/api/specialties", specialtyRouter); // GET /api/specialties
+app.use("/api/service-types", serviceTypeRouter); // GET /api/service-types
+app.use("/api/availabilities", availabilityRouter); // GET /api/availabilities
 
 // Appointment routes
-app.use("/api/appointment", appointmentRouter); // /api/appointment/my, /api/appointment/guest, etc.
+app.use("/api/appointments", appointmentRouter); // /api/appointments/my, /api/appointments/guest, etc.
 
 // Contact
 app.use("/api/contact", contactRouter); // POST /api/contact/send-message
